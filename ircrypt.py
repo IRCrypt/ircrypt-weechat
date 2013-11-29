@@ -40,12 +40,16 @@ def decrypt(data, msgtype, servername, args):
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
 	decrypted = p.stdout.read()
+	p.stdout.close()
+
+	# Get and print GPG errors/warnings
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
 		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
-	p.stdout.close()
+
+	# Remove old messages from buffer
 	del ircrypt_msg_buffer[dict['nick']]
 	return '%s%s' % (pre, decrypted)
 
@@ -58,19 +62,22 @@ def encrypt(data, msgtype, servername, args):
 	pre, message = string.split(args, ':', 1)
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--symmetric', '--cipher-algo', 'TWOFISH', '--passphrase-fd', '-'], 
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('passwort1\n')
 	p.stdin.write(message)
 	p.stdin.close()
 	encrypted = base64.b64encode(p.stdout.read())
 	p.stdout.close()
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	output = '%s:>CRY-0 %s' % (pre, encrypted)
 	# Check if encrypted message is to long.
 	# If that is the case, send multiple messages.
-	# weechat.prnt('', '%i' % len(args) )
-	# weechat.prnt('', '%i' % len(output) )
-	# weechat.prnt('', '%s' % output )
 	if len(output) > 400:
 		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[400:], output[:400])
 	return output
