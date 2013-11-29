@@ -16,18 +16,35 @@ def decrypt(data, msgtype, servername, args):
 	global ircrypt_msg_buffer
 
 	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
-	# ircrypt_msg_buffer[dict['nick']] = ['msg-part-2', 'msg-part-1']
-	weechat.prnt("", "dict: %s" % dict)
-	weechat.prnt("", args)
 	if (dict['channel'] != '#IRCrypt'):
 		return args
-	prepre, pre, message = string.split(args, ':', 2)
-	return '%s:%s:%s' % (prepre, pre, '')
+	pre, message    = string.split(args, '>CRY-', 1)
+	number, message = string.split(message, ' ', 1 )
 
+	if not dict['nick'] in ircrypt_msg_buffer:
+		ircrypt_msg_buffer[dict['nick']] = []
+	
+	ircrypt_msg_buffer[dict['nick']].insert(0,message)
+
+	if int(number) == 0:
+
+		message = ''.join(ircrypt_msg_buffer[dict['nick']])
+
+		p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
+			'--passphrase-fd', '-', '-d'], 
+			stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+		p.stdin.write('passwort1\n')
+		p.stdin.write(base64.b64decode(message))
+		p.stdin.close()
+		decrypted = p.stdout.read()
+		p.stdout.close()
+		return '%s%s' % (pre, decrypted)
+	else:
+		return ''
 
 def encrypt(data, msgtype, servername, args):
 	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
-	weechat.prnt("", "dict: %s" % dict)
+	# weechat.prnt("", "dict: %s" % dict)
 	if (dict['channel'] != '#IRCrypt'):
 		return args
 	pre, message = string.split(args, ':', 1)
@@ -43,9 +60,9 @@ def encrypt(data, msgtype, servername, args):
 	output = '%s: >CRY-0 %s' % (pre, encrypted)
 	# Check if encrypted message is to long.
 	# If that is the case, send multiple messages.
-	weechat.prnt('', '%i' % len(args) )
-	weechat.prnt('', '%i' % len(output) )
-	weechat.prnt('', '%s' % output )
+	# weechat.prnt('', '%i' % len(args) )
+	# weechat.prnt('', '%i' % len(output) )
+	# weechat.prnt('', '%s' % output )
 	if len(output) > 400:
 		output = '%s: >CRY-1 %s\r\n%s' % (pre, output[400:], output[:400])
 	return output
