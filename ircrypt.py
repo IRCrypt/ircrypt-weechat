@@ -26,21 +26,23 @@ def decrypt(data, msgtype, servername, args):
 	
 	ircrypt_msg_buffer[dict['nick']].insert(0,message)
 
-	if int(number) == 0:
-
-		message = ''.join(ircrypt_msg_buffer[dict['nick']])
-
-		p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
-			'--passphrase-fd', '-', '-d'], 
-			stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-		p.stdin.write('passwort1\n')
-		p.stdin.write(base64.b64decode(message))
-		p.stdin.close()
-		decrypted = p.stdout.read()
-		p.stdout.close()
-		return '%s%s' % (pre, decrypted)
-	else:
+	# Encrypt only if we got last part of the message
+	if int(number) != 0:
 		return ''
+
+	# Combine message parts
+	message = ''.join(ircrypt_msg_buffer[dict['nick']])
+
+	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
+		'--passphrase-fd', '-', '-d'], 
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+	p.stdin.write('passwort1\n')
+	p.stdin.write(base64.b64decode(message))
+	p.stdin.close()
+	decrypted = p.stdout.read()
+	p.stdout.close()
+	return '%s%s' % (pre, decrypted)
+
 
 def encrypt(data, msgtype, servername, args):
 	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
