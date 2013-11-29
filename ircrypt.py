@@ -40,14 +40,14 @@ def encrypt(data, msgtype, servername, args):
 	encrypted = base64.b64encode(p.stdout.read())
 	p.stdout.close()
 
-	output = '%s: >CRY-0 %s' % (pre, encrypted)
+	output = '%s:>CRY-0 %s' % (pre, encrypted)
 	# Check if encrypted message is to long.
 	# If that is the case, send multiple messages.
 	weechat.prnt('', '%i' % len(args) )
 	weechat.prnt('', '%i' % len(output) )
 	weechat.prnt('', '%s' % output )
 	if len(output) > 400:
-		output = '%s: >CRY-1 %s\r\n%s' % (pre, output[400:], output[:400])
+		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[400:], output[:400])
 	return output
 
 
