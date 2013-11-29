@@ -35,12 +35,18 @@ def decrypt(data, msgtype, servername, args):
 
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--passphrase-fd', '-', '-d'], 
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('passwort1\n')
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
 	decrypted = p.stdout.read()
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 	p.stdout.close()
+	del ircrypt_msg_buffer[dict['nick']]
 	return '%s%s' % (pre, decrypted)
 
 
