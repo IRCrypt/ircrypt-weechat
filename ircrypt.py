@@ -6,7 +6,7 @@ SCRIPT_VERSION = '0.0.0'
 SCRIPT_LICENSE = 'GPL3'
 SCRIPT_DESC    = 'IRCrypt - blabla'
 
-import weechat, string, os, subprocess, base64
+import weechat, string, os, subprocess, base64, curses
 
 
 ircrypt_msg_buffer = {}
@@ -102,8 +102,45 @@ def encrypt(data, msgtype, servername, args):
 	return output
 
 
+def ask_passwd():
+	'''This method uses curses to open a window and ask for a password which is
+	not printed onto the screen while it is typed in.
+	'''
+	# Initialize the curses module
+	screen = curses.initscr()
+
+	# Create the password window
+	h,w = screen.getmaxyx()
+	s = curses.newwin(5,21,h/2-2,w/2-10)
+	s.box()
+
+	# Neither do we want to see what we are typing nor do we need a cursor
+	curses.noecho()
+	curses.curs_set(0)
+	s.addstr(2,2,"Enter password...")
+	s.refresh()
+
+	passwd = s.getstr(2,18,150)
+
+	# Reset settings
+	curses.echo()
+	curses.curs_set(1)
+
+	return passwd
+
+
+def ircrypt_command(data, buffer, args):
+	'''Hook to handle the /ircrypt weechat command.
+	'''
+	weechat.prnt(buffer, 'Password: %s' % ask_passwd())
+	return weechat.WEECHAT_RC_OK
+
+
 # register plugin
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, '', 'UTF-8'):
 	# register the modifiers
 	weechat.hook_modifier('irc_in_privmsg', 'decrypt', '')
 	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
+
+	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys',
+			'shorthelp...', 'longhelp...', '', 'ircrypt_command', '')
