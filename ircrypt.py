@@ -7,9 +7,28 @@ SCRIPT_LICENSE = 'GPL3'
 SCRIPT_DESC    = 'IRCrypt - blabla'
 
 import weechat, string, os, subprocess, base64
+import time
 
 
 ircrypt_msg_buffer = {}
+
+class MessageParts:
+	modified = None
+	last_id  = None
+	message  = ''
+
+	def update(self, id, msg):
+		# Check if id is correct. If not, throw away old parts:
+		if last_id and last_id != id+1:
+			self.message = ''
+		# Check if the are old message parts which belong due to their old age 
+		# (> 5min) probably not to this message:
+		if time.time() - self.modified > 300:
+			self.message = ''
+		self.last_id = id
+		self.message = msg + self.message
+		self.modified = time.time()
+
 
 
 def decrypt(data, msgtype, servername, args):
@@ -31,18 +50,22 @@ def decrypt(data, msgtype, servername, args):
 	number, message = string.split(message, ' ', 1 )
 
 	buf_key = '%s.%s.%s' % (servername, dict['channel'], dict['nick'])
-	if not buf_key in ircrypt_msg_buffer:
-		ircrypt_msg_buffer[buf_key] = []
-	
-	ircrypt_msg_buffer[buf_key].insert(0,message)
 
-	# Encrypt only if we got last part of the message
+	# Decrypt only if we got last part of the message
+	# otherwise put the message into a globa buffer and quit
 	if int(number) != 0:
+		if not buf_key in ircrypt_msg_buffer:
+			ircrypt_msg_buffer[buf_key] = MessageParts()
+		ircrypt_msg_buffer[buf_key].update(int(number), message)
 		return ''
 
-	# Combine message parts
-	message = ''.join(ircrypt_msg_buffer[buf_key])
+	# Get whole message
+	try:
+		message = message + ircrypt_msg_buffer[buf_key].message
+	except KeyError:
+		pass
 
+	# Decrypt
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--passphrase-fd', '-', '-d'], 
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -60,7 +83,10 @@ def decrypt(data, msgtype, servername, args):
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	# Remove old messages from buffer
-	del ircrypt_msg_buffer[buf_key]
+	try:
+		del ircrypt_msg_buffer[buf_key]
+	except KeyError:
+		pass
 	return '%s%s' % (pre, decrypted)
 
 
