@@ -13,6 +13,15 @@ ircrypt_msg_buffer = {}
 
 
 def decrypt(data, msgtype, servername, args):
+	'''Hook for incomming PRVMSG commands.
+	This method will parse the input, check if it is an encrypted message and if
+	it is, decrypt it.
+
+	:param data:
+	:param msgtype:
+	:param servername: IRC server the message comes from.
+	:param args: IRC command line-
+	'''
 	global ircrypt_msg_buffer
 
 	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
@@ -55,7 +64,17 @@ def decrypt(data, msgtype, servername, args):
 	return '%s%s' % (pre, decrypted)
 
 
+
 def encrypt(data, msgtype, servername, args):
+	'''Hook for outgoing PRVMSG commands.
+	This method will encrypt outgoing messages and if necessary (if they grow to
+	large) split them into multiple parts.
+
+	:param data:
+	:param msgtype:
+	:param servername: IRC server the message comes from.
+	:param args: IRC command line-
+	'''
 	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
 	# weechat.prnt("", "dict: %s" % dict)
 	if (dict['channel'] != '#IRCrypt'):
