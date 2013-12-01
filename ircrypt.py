@@ -21,17 +21,18 @@ def decrypt(data, msgtype, servername, args):
 	pre, message    = string.split(args, '>CRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
-	if not dict['nick'] in ircrypt_msg_buffer:
-		ircrypt_msg_buffer[dict['nick']] = []
+	buf_key = '%s.%s.%s' % (servername, dict['channel'], dict['nick'])
+	if not buf_key in ircrypt_msg_buffer:
+		ircrypt_msg_buffer[buf_key] = []
 	
-	ircrypt_msg_buffer[dict['nick']].insert(0,message)
+	ircrypt_msg_buffer[buf_key].insert(0,message)
 
 	# Encrypt only if we got last part of the message
 	if int(number) != 0:
 		return ''
 
 	# Combine message parts
-	message = ''.join(ircrypt_msg_buffer[dict['nick']])
+	message = ''.join(ircrypt_msg_buffer[buf_key])
 
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--passphrase-fd', '-', '-d'], 
@@ -50,7 +51,7 @@ def decrypt(data, msgtype, servername, args):
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	# Remove old messages from buffer
-	del ircrypt_msg_buffer[dict['nick']]
+	del ircrypt_msg_buffer[buf_key]
 	return '%s%s' % (pre, decrypted)
 
 
