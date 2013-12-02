@@ -113,18 +113,23 @@ def ask_passwd():
 	h,w = screen.getmaxyx()
 	s = curses.newwin(5,21,h/2-2,w/2-10)
 	s.box()
+	s.refresh()
+	screen.refresh()
 
 	# Neither do we want to see what we are typing nor do we need a cursor
 	curses.noecho()
 	curses.curs_set(0)
 	s.addstr(2,2,"Enter password...")
 	s.refresh()
+	screen.refresh()
 
 	passwd = s.getstr(2,18,150)
 
 	# Reset settings
 	curses.echo()
 	curses.curs_set(1)
+
+	curses.endwin()
 
 	return passwd
 
