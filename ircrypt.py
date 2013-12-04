@@ -11,6 +11,9 @@ import time
 
 
 ircrypt_msg_buffer = {}
+ircrypt_config_file = None
+ircrypt_config_section = {}
+ircrypt_config_option = {}
 
 class MessageParts:
 	modified = None
@@ -129,8 +132,57 @@ def encrypt(data, msgtype, servername, args):
 	return output
 
 
+def ircrypt_config_init():
+	''' Initialize config file: create sections and options in memory. '''
+	global ircrypt_config_file, ircrypt_config_section, ircrypt_config_option
+	ircrypt_config_file = weechat.config_new('ircrypt', 'ircrypt_config_reload_cb', '')
+	if not ircrypt_config_file:
+		return
+
+	# marker
+	ircrypt_config_section['marker'] = weechat.config_new_section(
+		ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '', '', '')
+	if not ircrypt_config_section['marker']:
+		weechat.config_free(ircrypt_config_file)
+		return
+	ircrypt_config_option['encrypted'] = weechat.config_new_option(
+		ircrypt_config_file, ircrypt_config_section['marker'],
+		'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
+		'', '', 0, '', '', '', '', '', '')
+	ircrypt_config_option['unencrypted'] = weechat.config_new_option(
+		ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
+		'string', 'Marker for unencrypted messages received in an encrypted channel', 
+		'', 0, 0, '', '', 0, '', '', '', '', '', '')
+
+
+def ircrypt_config_reload_cb(data, config_file):
+	""" Reload config file. """
+	return weechat.WEECHAT_CONFIG_READ_OK
+
+
+def ircrypt_config_read():
+	''' Read ircrypt config file (ircrypt.conf). '''
+	global ircrypt_config_file
+	return weechat.config_read(ircrypt_config_file)
+
+
+def ircrypt_config_write():
+	''' Write ircrypt config file (ircrypt.conf). '''
+	global ircrypt_config_file
+	return weechat.config_write(ircrypt_config_file)
+
+
 # register plugin
-if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, '', 'UTF-8'):
+if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
+		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 	# register the modifiers
 	weechat.hook_modifier('irc_in_privmsg', 'decrypt', '')
 	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
+
+	ircrypt_config_init()
+	ircrypt_config_read()
+
+
+def ircrypt_unload_script():
+	ircrypt_config_write()
+	return weechat.WEECHAT_RC_OK
