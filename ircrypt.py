@@ -14,6 +14,8 @@ ircrypt_msg_buffer = {}
 ircrypt_config_file = None
 ircrypt_config_section = {}
 ircrypt_config_option = {}
+ircrypt_keys = {}
+
 
 class MessageParts:
 	modified = None
@@ -141,22 +143,30 @@ def ircrypt_config_init():
 
 	# marker
 	ircrypt_config_section['marker'] = weechat.config_new_section(
-		ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '', '', '')
+			ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '', '', '')
 	if not ircrypt_config_section['marker']:
 		weechat.config_free(ircrypt_config_file)
 		return
 	ircrypt_config_option['encrypted'] = weechat.config_new_option(
-		ircrypt_config_file, ircrypt_config_section['marker'],
-		'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
-		'', '', 0, '', '', '', '', '', '')
+			ircrypt_config_file, ircrypt_config_section['marker'],
+			'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
+			'', '', 0, '', '', '', '', '', '')
 	ircrypt_config_option['unencrypted'] = weechat.config_new_option(
-		ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
-		'string', 'Marker for unencrypted messages received in an encrypted channel', 
-		'', 0, 0, '', '', 0, '', '', '', '', '', '')
+			ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
+			'string', 'Marker for unencrypted messages received in an encrypted channel', 
+			'', 0, 0, '', '', 0, '', '', '', '', '', '')
+
+	# keys
+	ircrypt_config_section['keys'] = weechat.config_new_section(
+			ircrypt_config_file, 'keys', 0, 0, 'ircrypt_config_keys_read_cb', '',
+			'ircrypt_config_keys_write_cb', '', '',
+		'', '', '', '', '')
+	if not ircrypt_config_section['keys']:
+		weechat.config_free(ircrypt_config_file)
 
 
 def ircrypt_config_reload_cb(data, config_file):
-	""" Reload config file. """
+	''' Reload config file. '''
 	return weechat.WEECHAT_CONFIG_READ_OK
 
 
@@ -170,6 +180,28 @@ def ircrypt_config_write():
 	''' Write ircrypt config file (ircrypt.conf). '''
 	global ircrypt_config_file
 	return weechat.config_write(ircrypt_config_file)
+
+
+def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
+		value):
+	global ircrypt_keys
+
+	if not weechat.config_new_option(config_file, section_name, option_name,
+			'string', 'key', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
+		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
+
+	ircrypt_keys[option_name] = value
+	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
+
+
+def ircrypt_config_keys_write_cb(data, config_file, section_name):
+	global ircrypt_keys
+
+	weechat.config_write_line(config_file, section_name, '')
+	for target, key in sorted(ircrypt_keys.iteritems()):
+		weechat.config_write_line(config_file, target, key)
+
+	return weechat.WEECHAT_RC_OK
 
 
 # register plugin
