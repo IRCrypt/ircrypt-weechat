@@ -204,12 +204,73 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 	return weechat.WEECHAT_RC_OK
 
 
+def ircrypt_command(data, buffer, args):
+	'''Hook to handle the /ircrypt weechat command.
+	'''
+	global ircrypt_keys
+
+	if args == '' or args == 'list':
+		#ircrypt_list_keys(buffer)
+		return weechat.WEECHAT_RC_OK
+
+	argv = [a for a in args.split(' ') if a]
+	weechat.prnt('', '>> %s' % argv)
+
+	# Check if a server was set
+	if (len(argv) > 2 and argv[1] == '-server'):
+		server_name = argv[2]
+		del argv[2]
+		del argv[1]
+		args = args.split(' ', 2)[-1]
+	else:
+		server_name = weechat.buffer_get_string(buffer, 'localvar_server')
+
+	# For all actions we need two arguments
+	if len(argv) <= 2:
+		return weechat.WEECHAT_RC_ERROR
+
+	target = '%s/%s' % (server_name, argv[1])
+
+	# Set keys
+	if argv[0] == 'set':
+		ircrypt_keys[target] = ' '.join(argv[2:])
+		weechat.prnt(buffer, 'set key for %s' % target)
+		return weechat.WEECHAT_RC_OK
+
+	# Remove keys
+	if argv[0] == 'remove':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		if target not in ircrypt_keys:
+			return weechat.WEECHAT_RC_ERROR
+
+		del ircrypt_keys[target]
+		weechat.prnt(buffer, 'removed key for %s' % target)
+		return weechat.WEECHAT_RC_OK
+
+	# Error if command was unknown
+	return weechat.WEECHAT_RC_ERROR
+
+
 # register plugin
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 	# register the modifiers
 	weechat.hook_modifier('irc_in_privmsg', 'decrypt', '')
 	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
+
+	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys',
+			'[list] | set [-server <server>] <target> <key> '
+			'| remove [-server <server>] <target>',
+			'Add, change or remove key for target.\n'
+			'Target can be a channel or a nick.\n\n'
+			'Examples:\n'
+			'Set the key for a channel: /ircrypt set -server freenet #blowfish key\n'
+			'Remove the key:            /ircrypt remove #blowfish\n'
+			'Set the key for a user :   /ircrypt set nick secret+key\n',
+			'list || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- ',
+			'ircrypt_command', '')
 
 	ircrypt_config_init()
 	ircrypt_config_read()
