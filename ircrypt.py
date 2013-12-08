@@ -34,8 +34,40 @@
 # this project.
 #
 #
-# Suggestions, Bugs, ...?
-# https://github.com/IRCrypt/ircrypt-weechat
+# == Usage ==================================================================
+#
+#  The weechat IRCrypt plug-in will send messages encrypted to all channels for
+#  which a passphrase is set. A channel can either be a reqgular IRC multi-user
+#  channel (i.e. #IRCrypt) or another users nickname.
+#
+# To set, modify or remove a passphrase, use the /ircprypt command:
+#
+#   /ircrypt lkiesow secret                 # Sets the passphrase 'secret' to
+#                                           # use for all communication with
+#                                           # the user 'lkiesow' on the current
+#                                           # server.
+#   /ircrypt #IRCrypt xyz                   # Sets the passphrase 'xyz' to use
+#                                           # for all communication within the
+#                                           # channel '#IRCrypt' on the current
+#                                           # server.
+#   /ircrypt -server freenode shaardie abc  # Sets the passphrase 'abc' to use
+#                                           # for all communication with the
+#                                           # user 'shaardie' on the server
+#                                           # 'freenode'.
+#
+#
+# == Project ================================================================
+#
+# This plug-in is part of the IRCrypt project. For mor information or to
+# participate, please visit
+#
+#   https://github.com/IRCrypt
+#
+#
+# To report bugs, make suggestions, etc. for this partivular plug-in, please
+# have a look at:
+#
+#   https://github.com/IRCrypt/ircrypt-weechat
 #
 
 
