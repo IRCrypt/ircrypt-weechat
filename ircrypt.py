@@ -46,14 +46,19 @@ def decrypt(data, msgtype, servername, args):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_msg_buffer, ircrypt_config_option
+	global ircrypt_msg_buffer, ircrypt_config_option, ircrypt_keys
 
-	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
-	if (dict['channel'] != '#IRCrypt'):
+	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+
+	# Stop if there is no key for this conversation
+	if not key:
 		return args
+
 	pre, message    = string.split(args, '>CRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
+	# Get key forthe message buffer
 	buf_key = '%s.%s.%s' % (servername, dict['channel'], dict['nick'])
 
 	# Decrypt only if we got last part of the message
