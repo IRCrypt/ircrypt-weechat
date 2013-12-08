@@ -46,7 +46,7 @@ def decrypt(data, msgtype, servername, args):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_msg_buffer
+	global ircrypt_msg_buffer, ircrypt_config_option
 
 	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
 	if (dict['channel'] != '#IRCrypt'):
@@ -92,7 +92,7 @@ def decrypt(data, msgtype, servername, args):
 		del ircrypt_msg_buffer[buf_key]
 	except KeyError:
 		pass
-	return '%s%s' % (pre, decrypted)
+	return '%s%s%s' % (ircrypt_config_option.get('encrypted') or '', pre, decrypted)
 
 
 
@@ -106,15 +106,19 @@ def encrypt(data, msgtype, servername, args):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	dict = weechat.info_get_hashtable("irc_message_parse", { "message": args })
-	# weechat.prnt("", "dict: %s" % dict)
-	if (dict['channel'] != '#IRCrypt'):
+	global ircrypt_keys
+	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+
+	# Stop if there is no key for this conversation
+	if not key:
 		return args
+
 	pre, message = string.split(args, ':', 1)
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--symmetric', '--cipher-algo', 'TWOFISH', '--passphrase-fd', '-'], 
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write('passwort1\n')
+	p.stdin.write('%s\n' % key)
 	p.stdin.write(message)
 	p.stdin.close()
 	encrypted = base64.b64encode(p.stdout.read())
@@ -225,14 +229,16 @@ def ircrypt_command(data, buffer, args):
 	else:
 		server_name = weechat.buffer_get_string(buffer, 'localvar_server')
 
-	# For all actions we need two arguments
-	if len(argv) <= 2:
+	# We need at least one additional argument
+	if len(argv) < 2:
 		return weechat.WEECHAT_RC_ERROR
 
 	target = '%s/%s' % (server_name, argv[1])
 
 	# Set keys
 	if argv[0] == 'set':
+		if len(argv) != 3:
+			return weechat.WEECHAT_RC_ERROR
 		ircrypt_keys[target] = ' '.join(argv[2:])
 		weechat.prnt(buffer, 'set key for %s' % target)
 		return weechat.WEECHAT_RC_OK
