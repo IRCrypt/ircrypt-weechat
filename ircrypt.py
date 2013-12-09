@@ -252,6 +252,17 @@ def ircrypt_config_init():
 			'string', 'Marker for unencrypted messages received in an encrypted channel', 
 			'', 0, 0, '', '', 0, '', '', '', '', '', '')
 
+	# cipher options
+	ircrypt_config_section['cipher'] = weechat.config_new_section(
+			ircrypt_config_file, 'cipher', 0, 0, '', '', '', '', '', '', '', '', '', '')
+	if not ircrypt_config_section['cipher']:
+		weechat.config_free(ircrypt_config_file)
+		return
+	ircrypt_config_option['default symmetric cipher'] = weechat.config_new_option(
+			ircrypt_config_file, ircrypt_config_section['cipher'],
+			'default symmetric cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
+			'', 'TWOFISH', 0, '', '', '', '', '', '')
+
 	# keys
 	ircrypt_config_section['keys'] = weechat.config_new_section(
 			ircrypt_config_file, 'keys', 0, 0, 'ircrypt_config_keys_read_cb', '',
