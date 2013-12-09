@@ -246,11 +246,11 @@ def ircrypt_config_init():
 	ircrypt_config_option['encrypted'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['marker'],
 			'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
-			'', '', 0, '', '', '', '', '', '')
+			'', 'encrypted', 0, '', '', '', '', '', '')
 	ircrypt_config_option['unencrypted'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
 			'string', 'Marker for unencrypted messages received in an encrypted channel', 
-			'', 0, 0, '', '', 0, '', '', '', '', '', '')
+			'', 0, 0, '', 'u', 0, '', '', '', '', '', '')
 
 	# cipher options
 	ircrypt_config_section['cipher'] = weechat.config_new_section(
