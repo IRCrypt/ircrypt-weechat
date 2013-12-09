@@ -133,6 +133,13 @@ def decrypt(data, msgtype, servername, args):
 	if not key:
 		return args
 
+	# Stop if there is no encrypted message prefix
+	if not '>CRY-' in args:
+		pre, message = string.split(args, ' :', 1)
+		return '%s :[%s] %s' % (pre, 
+				weechat.config_string(ircrypt_config_option['unencrypted']),
+				message)
+
 	pre, message    = string.split(args, '>CRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
