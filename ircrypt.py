@@ -157,7 +157,7 @@ def decrypt(data, msgtype, servername, args):
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--passphrase-fd', '-', '-d'], 
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write('passwort1\n')
+	p.stdin.write('%s\n' % key)
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
 	decrypted = p.stdout.read()
