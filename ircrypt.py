@@ -175,7 +175,7 @@ def decrypt(data, msgtype, servername, args):
 		del ircrypt_msg_buffer[buf_key]
 	except KeyError:
 		pass
-	return '%s%s%s' % (ircrypt_config_option.get('encrypted') or '', pre, decrypted)
+	return '%s%s' % (pre, decrypted)
 
 
 
@@ -311,7 +311,6 @@ def ircrypt_command(data, buffer, args):
 		return weechat.WEECHAT_RC_OK
 
 	argv = [a for a in args.split(' ') if a]
-	weechat.prnt('', '>> %s' % argv)
 
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
