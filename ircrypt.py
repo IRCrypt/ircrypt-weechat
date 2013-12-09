@@ -37,7 +37,7 @@
 # == Usage ==================================================================
 #
 #  The weechat IRCrypt plug-in will send messages encrypted to all channels for
-#  which a passphrase is set. A channel can either be a reqgular IRC multi-user
+#  which a passphrase is set. A channel can either be a regular IRC multi-user
 #  channel (i.e. #IRCrypt) or another users nickname.
 #
 # To set, modify or remove a passphrase, use the /ircprypt command:
@@ -64,7 +64,7 @@
 #   https://github.com/IRCrypt
 #
 #
-# To report bugs, make suggestions, etc. for this partivular plug-in, please
+# To report bugs, make suggestions, etc. for this particular plug-in, please
 # have a look at:
 #
 #   https://github.com/IRCrypt/ircrypt-weechat
@@ -89,11 +89,18 @@ ircrypt_keys = {}
 
 
 class MessageParts:
+	'''Class used for storing parts of messages which were splitted after
+	encryption due to their length.'''
+
 	modified = None
 	last_id  = None
 	message  = ''
 
 	def update(self, id, msg):
+		'''This method updates an already existing message part by adding a new
+		part to the old ones and updating the identifier of the latest received
+		message part.
+		'''
 		# Check if id is correct. If not, throw away old parts:
 		if last_id and last_id != id+1:
 			self.message = ''
@@ -215,7 +222,9 @@ def encrypt(data, msgtype, servername, args):
 
 
 def ircrypt_config_init():
-	''' Initialize config file: create sections and options in memory. '''
+	''' This method initializes the configuration file. It creates sections and
+	options in memory and prepares the handling of key sections.
+	'''
 	global ircrypt_config_file, ircrypt_config_section, ircrypt_config_option
 	ircrypt_config_file = weechat.config_new('ircrypt', 'ircrypt_config_reload_cb', '')
 	if not ircrypt_config_file:
@@ -246,24 +255,29 @@ def ircrypt_config_init():
 
 
 def ircrypt_config_reload_cb(data, config_file):
-	''' Reload config file. '''
+	''' Reload config file.
+	'''
 	return weechat.WEECHAT_CONFIG_READ_OK
 
 
 def ircrypt_config_read():
-	''' Read ircrypt config file (ircrypt.conf). '''
+	''' Read IRCrypt configuration file (ircrypt.conf).
+	'''
 	global ircrypt_config_file
 	return weechat.config_read(ircrypt_config_file)
 
 
 def ircrypt_config_write():
-	''' Write ircrypt config file (ircrypt.conf). '''
+	''' Write IRCrypt configuration file (ircrypt.conf) to disk.
+	'''
 	global ircrypt_config_file
 	return weechat.config_write(ircrypt_config_file)
 
 
 def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 		value):
+	'''Read elements of the key section from the configuration file.
+	'''
 	global ircrypt_keys
 
 	if not weechat.config_new_option(config_file, section_name, option_name,
@@ -275,6 +289,8 @@ def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 
 
 def ircrypt_config_keys_write_cb(data, config_file, section_name):
+	'''Write passphrases to the key section of the configuration file.
+	'''
 	global ircrypt_keys
 
 	weechat.config_write_line(config_file, section_name, '')
@@ -285,7 +301,8 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 
 
 def ircrypt_command(data, buffer, args):
-	'''Hook to handle the /ircrypt weechat command.
+	'''Hook to handle the /ircrypt weechat command. In particular, this will
+	handle the setting and removal of passphrases for channels.
 	'''
 	global ircrypt_keys
 
@@ -359,5 +376,8 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 
 
 def ircrypt_unload_script():
+	'''Hook to ensure the configuration is properly written to disk when the
+	script is unloaded.
+	'''
 	ircrypt_config_write()
 	return weechat.WEECHAT_RC_OK
