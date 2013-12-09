@@ -137,7 +137,7 @@ def decrypt(data, msgtype, servername, args):
 	number, message = string.split(message, ' ', 1 )
 
 	# Get key forthe message buffer
-	buf_key = '%s.%s.%s' % (servername, dict['channel'], dict['nick'])
+	buf_key = '%s.%s.%s' % (servername, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
 	# otherwise put the message into a globa buffer and quit
