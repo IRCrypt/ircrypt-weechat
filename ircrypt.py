@@ -206,7 +206,9 @@ def encrypt(data, msgtype, servername, args):
 
 	pre, message = string.split(args, ':', 1)
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
-		'--symmetric', '--cipher-algo', 'TWOFISH', '--passphrase-fd', '-'], 
+		'--symmetric', '--cipher-algo', 
+		weechat.config_string(ircrypt_config_option['sym_cipher']),
+		'--passphrase-fd', '-'], 
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
 	p.stdin.write(message)
@@ -258,9 +260,9 @@ def ircrypt_config_init():
 	if not ircrypt_config_section['cipher']:
 		weechat.config_free(ircrypt_config_file)
 		return
-	ircrypt_config_option['default symmetric cipher'] = weechat.config_new_option(
+	ircrypt_config_option['sym_cipher'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['cipher'],
-			'default symmetric cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
+			'sym_cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
 			'', 'TWOFISH', 0, '', '', '', '', '', '')
 
 	# keys
