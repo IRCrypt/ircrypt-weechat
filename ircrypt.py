@@ -196,14 +196,33 @@ def encrypt(data, msgtype, servername, args):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_keys
+	global ircrypt_keys, ircrypt_asym_id
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+
+	# check symmetric key
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+	if key:
+		return encrypt_sym(servername, args, info, key)
 
-	# Stop if there is no key for this conversation
-	if not key:
-		return args
+	# check asymmetric key id
+	key_id = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+	if key_id:
+		return encrypt_sym(servername, args, info, key_id)
 
+	# No key -> don't encrypt
+	return args
+
+
+def encrypt_sym(servername, args, info, key):
+	'''Hook for outgoing PRVMSG commands.
+	This method will encrypt outgoing messages and if necessary (if they grow to
+	large) split them into multiple parts.
+
+	:param data:
+	:param msgtype:
+	:param servername: IRC server the message comes from.
+	:param args: IRC command line-
+	'''
 	pre, message = string.split(args, ':', 1)
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
 		'--symmetric', '--cipher-algo', 
@@ -228,6 +247,36 @@ def encrypt(data, msgtype, servername, args):
 	if len(output) > 400:
 		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[400:], output[:400])
 	return output
+
+
+
+def encrypt_asym(servername, args, info, key_id):
+	'''Hook for outgoing PRVMSG commands.
+	This method will encrypt outgoing messages and if necessary (if they grow to
+	large) split them into multiple parts.
+
+	:param data:
+	:param msgtype:
+	:param servername: IRC server the message comes from.
+	:param args: IRC command line-
+	'''
+	pre, message = string.split(args, ':', 1)
+	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', '-e', '-r',
+		key_id], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+		stderr=subprocess.PIPE)
+	p.stdin.write(message)
+	p.stdin.close()
+	encrypted = base64.b64encode(p.stdout.read())
+	p.stdout.close()
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+
+	return '\n'.join(['ACRY-%i %s' % (i, encrypted[i*400:(i+1)*400]) 
+		for i in xrange(len(encrypted) / 400)])
 
 
 def ircrypt_config_init():
