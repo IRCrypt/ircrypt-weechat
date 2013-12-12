@@ -86,7 +86,7 @@ ircrypt_config_file = None
 ircrypt_config_section = {}
 ircrypt_config_option = {}
 ircrypt_keys = {}
-
+ircrypt_asym_id = {}
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -272,6 +272,14 @@ def ircrypt_config_init():
 		'', '', '', '', '')
 	if not ircrypt_config_section['keys']:
 		weechat.config_free(ircrypt_config_file)
+	
+	# Asymmetric key identifier
+	ircrypt_config_section['asym_id'] = weechat.config_new_section(
+			ircrypt_config_file, 'Asym_id', 0, 0, 'ircrypt_config_asym_id_read_cb', '',
+			'ircrypt_config_asym_id_write_cb', '', '',
+		'', '', '', '', '')
+	if not ircrypt_config_section['asym_id']:
+		weechat.config_free(ircrypt_config_file)
 
 
 def ircrypt_config_reload_cb(data, config_file):
@@ -319,6 +327,30 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 
 	return weechat.WEECHAT_RC_OK
 
+def ircrypt_config_asym_id_read_cb(data, config_file, section_name, option_name,
+		value):
+	'''Read elements of the key section from the configuration file.
+	'''
+	global ircrypt_asym_id
+
+	if not weechat.config_new_option(config_file, section_name, option_name,
+			'string', 'asym_id', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
+		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
+
+	ircrypt_asym_id[option_name] = value
+	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
+
+
+def ircrypt_config_asym_id_write_cb(data, config_file, section_name):
+	'''Write passphrases to the key section of the configuration file.
+	'''
+	global ircrypt_asym_id
+
+	weechat.config_write_line(config_file, section_name, '')
+	for target, asym_id in sorted(ircrypt_asym_id.iteritems()):
+		weechat.config_write_line(config_file, target, asym_id)
+
+	return weechat.WEECHAT_RC_OK
 
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. In particular, this will
@@ -364,6 +396,25 @@ def ircrypt_command(data, buffer, args):
 
 		del ircrypt_keys[target]
 		weechat.prnt(buffer, 'removed key for %s' % target)
+		return weechat.WEECHAT_RC_OK
+	
+	# Set asymmetric ids
+	if argv[0] == 'set-pub':
+		if len(argv) != 3:
+			return weechat.WEECHAT_RC_ERROR
+		ircrypt_asym_id[target] = ' '.join(argv[2:])
+		weechat.prnt(buffer, 'set asymmetric identifier for %s' % target)
+		return weechat.WEECHAT_RC_OK
+
+	# Remove keys
+	if argv[0] == 'remove-pub':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		if target not in ircrypt_asym_id:
+			return weechat.WEECHAT_RC_ERROR
+
+		del ircrypt_asym_id[target]
+		weechat.prnt(buffer, 'removed asymmetric identifier for %s' % target)
 		return weechat.WEECHAT_RC_OK
 
 	# Error if command was unknown
