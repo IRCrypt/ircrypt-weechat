@@ -205,9 +205,9 @@ def encrypt(data, msgtype, servername, args):
 		return encrypt_sym(servername, args, info, key)
 
 	# check asymmetric key id
-	key_id = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+	key_id = ircrypt_asym_id.get('%s/%s' % (servername, info['channel']))
 	if key_id:
-		return encrypt_sym(servername, args, info, key_id)
+		return encrypt_asym(servername, args, info, key_id)
 
 	# No key -> don't encrypt
 	return args
@@ -275,8 +275,8 @@ def encrypt_asym(servername, args, info, key_id):
 		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
-	return '\n'.join(['ACRY-%i %s' % (i, encrypted[i*400:(i+1)*400]) 
-		for i in xrange(len(encrypted) / 400)])
+	return '\n'.join(['%s:ACRY-%i %s' % (pre, i, encrypted[i*400:(i+1)*400]) 
+		for i in xrange(1 + (len(encrypted) / 400))])
 
 
 def ircrypt_config_init():
