@@ -428,17 +428,27 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	weechat.hook_modifier('irc_in_privmsg', 'decrypt', '')
 	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
 
-	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys',
+	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
 			'[list] | set [-server <server>] <target> <key> '
-			'| remove [-server <server>] <target>',
-			'Add, change or remove key for target.\n'
+			'| remove [-server <server>] <target>'
+			'| set-pub [-server <server>] <nick> <id>'
+			'| remove-pub [-server <server>] <nick>',
+			'Add, change or remove key for target and \n'
+			'Add, change or remove public key identifier for nick.\n'
 			'Target can be a channel or a nick.\n\n'
 			'Examples:\n'
-			'Set the key for a channel: /ircrypt set -server freenet #blowfish key\n'
-			'Remove the key:            /ircrypt remove #blowfish\n'
-			'Set the key for a user :   /ircrypt set nick secret+key\n',
+			'Set the key for a channel:'
+			'\n   /ircrypt set -server freenet #blowfish key\n'
+			'Remove the key:'
+			'\n   /ircrypt remove #blowfish\n'
+			'Set the key for a user:'
+			'\n   /ircrypt set nick secret+key\n'
+			'Set the public key identifier for a user:'
+			'\n   /ircrypt set nick Id\n',
 			'list || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- ',
+			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'|| set-pub %(nicks)|-server %(irc_servers) %- '
+			'|| remove-pub |%(nicks)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
 
 	ircrypt_config_init()
