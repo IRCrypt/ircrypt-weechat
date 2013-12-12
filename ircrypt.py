@@ -92,7 +92,7 @@ class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
 	encryption due to their length.'''
 
-	modified = None
+	modified = 0
 	last_id  = None
 	message  = ''
 
@@ -102,7 +102,7 @@ class MessageParts:
 		message part.
 		'''
 		# Check if id is correct. If not, throw away old parts:
-		if last_id and last_id != id+1:
+		if self.last_id and self.last_id != id+1:
 			self.message = ''
 		# Check if the are old message parts which belong due to their old age 
 		# (> 5min) probably not to this message:
