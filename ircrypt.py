@@ -238,7 +238,7 @@ def encrypt_sym(servername, args, info, key):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	output = '%s:>CRY-0 %s' % (pre, encrypted)
@@ -272,11 +272,11 @@ def encrypt_asym(servername, args, info, key_id):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
-	return '\n'.join(['%s:ACRY-%i %s' % (pre, i, encrypted[i*400:(i+1)*400]) 
-		for i in xrange(1 + (len(encrypted) / 400))])
+	return '\n'.join(['%s:>ACRY-%i %s' % (pre, i, encrypted[i*400:(i+1)*400]) 
+		for i in xrange(1 + (len(encrypted) / 400))][::-1])
 
 
 def ircrypt_config_init():
