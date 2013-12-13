@@ -124,26 +124,42 @@ def decrypt(data, msgtype, servername, args):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_msg_buffer, ircrypt_config_option, ircrypt_keys
+	global ircrypt_config_option, ircrypt_keys, ircrypt_asym_id
 
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+
+	if '>ACRY-' in args:
+		return decrypt_asym(servername, args, info)
+
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+	if key:
+		if '>CRY-' in args:		
+			return decrypt_sym(servername, args, info, key)
+		else:
+			pre, message = string.split(args, ' :', 1)
+			return '%s :%s %s' % (pre, 
+					weechat.config_string(ircrypt_config_option['unencrypted']),
+					message)
 
-	# Stop if there is no key for this conversation
-	if not key:
-		return args
+	return args
 
-	# Stop if there is no encrypted message prefix
-	if not '>CRY-' in args:
-		pre, message = string.split(args, ' :', 1)
-		return '%s :[%s] %s' % (pre, 
-				weechat.config_string(ircrypt_config_option['unencrypted']),
-				message)
+
+def decrypt_sym(servername, args, info, key):
+	'''Hook for incomming PRVMSG commands.
+	This method will parse the input, check if it is an encrypted message and if
+	it is, decrypt it.
+
+	:param data:
+	:param msgtype:
+	:param servername: IRC server the message comes from.
+	:param args: IRC command line-
+	'''
+	global ircrypt_msg_buffer, ircrypt_config_option
 
 	pre, message    = string.split(args, '>CRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
-	# Get key forthe message buffer
+	# Get key for the message buffer
 	buf_key = '%s.%s.%s' % (servername, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
@@ -165,6 +181,61 @@ def decrypt(data, msgtype, servername, args):
 		'--passphrase-fd', '-', '-d'], 
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
+	p.stdin.write(base64.b64decode(message))
+	p.stdin.close()
+	decrypted = p.stdout.read()
+	p.stdout.close()
+
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+
+	# Remove old messages from buffer
+	try:
+		del ircrypt_msg_buffer[buf_key]
+	except KeyError:
+		pass
+	return '%s%s' % (pre, decrypted)
+
+
+def decrypt_asym(servername, args, info):
+	'''Hook for incomming PRVMSG commands.
+	This method will parse the input, check if it is an encrypted message and if
+	it is, decrypt it.
+
+	:param data:
+	:param msgtype:
+	:param servername: IRC server the message comes from.
+	:param args: IRC command line-
+	'''
+	global ircrypt_msg_buffer, ircrypt_config_option
+	
+	pre, message    = string.split(args, '>ACRY-', 1)
+	number, message = string.split(message, ' ', 1 )
+
+	# Get key for the message buffer
+	buf_key = '%s.%s.%s' % (servername, info['channel'], info['nick'])
+
+	# Decrypt only if we got last part of the message
+	# otherwise put the message into a globa buffer and quit
+	if int(number) != 0:
+		if not buf_key in ircrypt_msg_buffer:
+			ircrypt_msg_buffer[buf_key] = MessageParts()
+		ircrypt_msg_buffer[buf_key].update(int(number), message)
+		return ''
+
+	# Get whole message
+	try:
+		message = message + ircrypt_msg_buffer[buf_key].message
+	except KeyError:
+		pass
+	
+	# Decrypt
+	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'], 
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
 	decrypted = p.stdout.read()
