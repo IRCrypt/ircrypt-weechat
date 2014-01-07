@@ -375,7 +375,7 @@ def ircrypt_config_init():
 	ircrypt_config_option['encrypted'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['marker'],
 			'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
-			'', 'encrypted', 0, '', '', '', '', '', '')
+			'encrypted', 'encrypted', 0, '', '', '', '', '', '')
 	ircrypt_config_option['unencrypted'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
 			'string', 'Marker for unencrypted messages received in an encrypted channel', 
@@ -552,6 +552,23 @@ def ircrypt_command(data, buffer, args):
 	return weechat.WEECHAT_RC_ERROR
 
 
+def ircrypt_update_encryption_status(data, signal, signal_data):
+    weechat.bar_item_update('ircrypt')
+    return weechat.WEECHAT_RC_OK
+
+
+def ircrypt_encryption_statusbar(*args):
+	#channel = weechat.buffer_get_string(weechat.current_buffer(), "short_name")
+	channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
+	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
+	weechat.prnt('', '-- %s -- %s --' % (server, channel))
+	key = ircrypt_keys.get('%s/%s' % (server, channel))
+	if key:
+		return weechat.config_string(ircrypt_config_option['encrypted'])
+	else:
+		return ''
+
+
 # register plugin
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
@@ -584,6 +601,8 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 
 	ircrypt_config_init()
 	ircrypt_config_read()
+	weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
+	weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
 
 
 def ircrypt_unload_script():
