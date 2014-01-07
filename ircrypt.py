@@ -56,6 +56,12 @@
 #                                           # 'freenode'.
 #
 #
+# Configuration
+#
+# You can add 'ircrypt' to weechat.bar.status.items to have an indication that
+# the message you are going to send is encrypted.
+
+#
 # == Project ================================================================
 #
 # This plug-in is part of the IRCrypt project. For mor information or to
