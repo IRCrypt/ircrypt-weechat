@@ -126,9 +126,15 @@ def decrypt(data, msgtype, servername, args):
 	'''
 	global ircrypt_config_option, ircrypt_keys, ircrypt_asym_id
 
-	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
 	if '>ACRY-' in args:
+		if not weechat.config_boolean(
+				weechat.config_get('ircrypt.cipher.asym_enabled')):
+			if '>ACRY-0 ' in args:
+				weechat.command('','/notice %s >UCRY-CIPHER-NOT-FOUND' % info['nick'])
+			return ''
+
 		return decrypt_asym(servername, args, info)
 
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
@@ -277,7 +283,8 @@ def encrypt(data, msgtype, servername, args):
 
 	# check asymmetric key id
 	key_id = ircrypt_asym_id.get('%s/%s' % (servername, info['channel']))
-	if key_id:
+	if key_id and weechat.config_boolean(
+				weechat.config_get('ircrypt.cipher.asym_enabled')):
 		return encrypt_asym(servername, args, info, key_id)
 
 	# No key -> don't encrypt
@@ -383,7 +390,11 @@ def ircrypt_config_init():
 	ircrypt_config_option['sym_cipher'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['cipher'],
 			'sym_cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
-			'', 'TWOFISH', 0, '', '', '', '', '', '')
+			'TWOFISH', 'TWOFISH', 0, '', '', '', '', '', '')
+	ircrypt_config_option['asym_enabled'] = weechat.config_new_option(
+			ircrypt_config_file, ircrypt_config_section['cipher'],
+			'asym_enabled', 'boolean', 'If asymmetric encryption is used for message encryption', '', 0, 0,
+			'off', 'off', 0, '', '', '', '', '', '')
 
 	# keys
 	ircrypt_config_section['keys'] = weechat.config_new_section(
@@ -395,7 +406,7 @@ def ircrypt_config_init():
 	
 	# Asymmetric key identifier
 	ircrypt_config_section['asym_id'] = weechat.config_new_section(
-			ircrypt_config_file, 'Asym_id', 0, 0, 'ircrypt_config_asym_id_read_cb', '',
+			ircrypt_config_file, 'asym_id', 0, 0, 'ircrypt_config_asym_id_read_cb', '',
 			'ircrypt_config_asym_id_write_cb', '', '',
 		'', '', '', '', '')
 	if not ircrypt_config_section['asym_id']:
