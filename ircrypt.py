@@ -110,7 +110,7 @@ class MessageParts:
 		# Check if id is correct. If not, throw away old parts:
 		if self.last_id and self.last_id != id+1:
 			self.message = ''
-		# Check if the are old message parts which belong due to their old age 
+		# Check if the are old message parts which belong due to their old age
 		# (> 5min) probably not to this message:
 		if time.time() - self.modified > 300:
 			self.message = ''
@@ -145,11 +145,11 @@ def decrypt(data, msgtype, servername, args):
 
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
 	if key:
-		if '>CRY-' in args:		
+		if '>CRY-' in args:
 			return decrypt_sym(servername, args, info, key)
 		else:
 			pre, message = string.split(args, ' :', 1)
-			return '%s :%s %s' % (pre, 
+			return '%s :%s %s' % (pre,
 					weechat.config_string(ircrypt_config_option['unencrypted']),
 					message)
 
@@ -189,8 +189,8 @@ def decrypt_sym(servername, args, info, key):
 		pass
 
 	# Decrypt
-	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
-		'--passphrase-fd', '-', '-d'], 
+	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet',
+		'--passphrase-fd', '-', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
 	p.stdin.write(base64.b64decode(message))
@@ -224,7 +224,7 @@ def decrypt_asym(servername, args, info):
 	:param args: IRC command line-
 	'''
 	global ircrypt_msg_buffer, ircrypt_config_option
-	
+
 	pre, message    = string.split(args, '>ACRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
@@ -244,9 +244,9 @@ def decrypt_asym(servername, args, info):
 		message = message + ircrypt_msg_buffer[buf_key].message
 	except KeyError:
 		pass
-	
+
 	# Decrypt
-	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'], 
+	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
@@ -308,10 +308,10 @@ def encrypt_sym(servername, args, info, key):
 	:param args: IRC command line-
 	'''
 	pre, message = string.split(args, ':', 1)
-	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet', 
-		'--symmetric', '--cipher-algo', 
+	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet',
+		'--symmetric', '--cipher-algo',
 		weechat.config_string(ircrypt_config_option['sym_cipher']),
-		'--passphrase-fd', '-'], 
+		'--passphrase-fd', '-'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
 	p.stdin.write(message)
@@ -359,7 +359,7 @@ def encrypt_asym(servername, args, info, key_id):
 		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
-	return '\n'.join(['%s:>ACRY-%i %s' % (pre, i, encrypted[i*400:(i+1)*400]) 
+	return '\n'.join(['%s:>ACRY-%i %s' % (pre, i, encrypted[i*400:(i+1)*400])
 		for i in xrange(1 + (len(encrypted) / 400))][::-1])
 
 
@@ -384,7 +384,7 @@ def ircrypt_config_init():
 			'encrypted', 'encrypted', 0, '', '', '', '', '', '')
 	ircrypt_config_option['unencrypted'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
-			'string', 'Marker for unencrypted messages received in an encrypted channel', 
+			'string', 'Marker for unencrypted messages received in an encrypted channel',
 			'', 0, 0, '', 'u', 0, '', '', '', '', '', '')
 
 	# cipher options
@@ -409,7 +409,7 @@ def ircrypt_config_init():
 		'', '', '', '', '')
 	if not ircrypt_config_section['keys']:
 		weechat.config_free(ircrypt_config_file)
-	
+
 	# Asymmetric key identifier
 	ircrypt_config_section['asym_id'] = weechat.config_new_section(
 			ircrypt_config_file, 'asym_id', 0, 0, 'ircrypt_config_asym_id_read_cb', '',
@@ -534,7 +534,7 @@ def ircrypt_command(data, buffer, args):
 		del ircrypt_keys[target]
 		weechat.prnt(buffer, 'removed key for %s' % target)
 		return weechat.WEECHAT_RC_OK
-	
+
 	# Set asymmetric ids
 	if argv[0] == 'set-pub':
 		if len(argv) != 3:
