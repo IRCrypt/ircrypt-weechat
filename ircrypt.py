@@ -118,6 +118,47 @@ class MessageParts:
 		self.message = msg + self.message
 		self.modified = time.time()
 
+def keyex_sendkey (nick, channel, servername):
+
+	# If no server was set, use the active one
+	if not servername:
+		servername = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
+
+	# If no channel was set, assume that it is for a private conversation and
+	# set it to the other persons nick.
+	if not channel:
+		channel = nick
+
+	key = ircrypt_keys.get('%s/%s' % (servername, channel))
+	key_id = ircrypt_asym_id.get('%s/%s' % (servername, nick))
+
+	if not key:
+		weechat.prnt('', 'There is no key for this channel.')
+		return weechat.WEECHAT_RC_OK
+
+	if not key_id:
+		weechat.prnt('', 'There is no ID for this Nick.')
+		return weechat.WEECHAT_RC_OK
+
+	p = subprocess.Popen(['gpg2', '--sign', '--encrypt', '-r',
+		key_id, '--batch', '--no-tty'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+		stderr=subprocess.PIPE)
+	p.stdin.write(key)
+	p.stdin.close()
+	encrypted = base64.b64encode(p.stdout.read())
+	p.stdout.close()
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		weechat.prnt('', 'GPG reported error:\n%s' % err)
+	if not encrypted:
+		return weechat.WEECHAT_RC_ERROR
+
+	for i in range(1 + (len(encrypted) / 400))[::-1]:
+		msg = '>2CRY-%i %s' % (i, encrypted[i*400:(i+1)*400])
+		weechat.command('','/notice -server %s %s %s' % (servername, nick, msg))
+	return weechat.WEECHAT_RC_OK
 
 
 def decrypt(data, msgtype, servername, args):
@@ -517,6 +558,14 @@ def ircrypt_command(data, buffer, args):
 	target = '%s/%s' % (server_name, argv[1])
 
 	# Set keys
+	if argv[0] == 'exchange':
+		if len(argv) == 2:
+			return keyex_sendkey(argv[1], None, server_name)
+		if len(argv) == 3:
+			return keyex_sendkey(argv[1], argv[2], server_name)
+		return weechat.WEECHAT_RC_ERROR
+
+	# Set keys
 	if argv[0] == 'set':
 		if len(argv) != 3:
 			return weechat.WEECHAT_RC_ERROR
@@ -582,7 +631,9 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
 
 	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
-			'[list] | set [-server <server>] <target> <key> '
+			'[list] '
+			'| exchange [-server <server>] <nick> [channel] '
+			'| set [-server <server>] <target> <key> '
 			'| remove [-server <server>] <target>'
 			'| set-pub [-server <server>] <nick> <id>'
 			'| remove-pub [-server <server>] <nick>',
@@ -600,6 +651,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'\n   /ircrypt set nick Id\n',
 			'list || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| set-pub %(nicks)|-server %(irc_servers) %- '
 			'|| remove-pub |%(nicks)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
