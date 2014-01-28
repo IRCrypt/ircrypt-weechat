@@ -202,7 +202,7 @@ def decrypt_sym(servername, args, info, key):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	# Remove old messages from buffer
@@ -257,7 +257,7 @@ def decrypt_asym(servername, args, info):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.#IRCrypt' % servername)
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	# Remove old messages from buffer
