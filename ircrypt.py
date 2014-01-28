@@ -569,7 +569,11 @@ def ircrypt_encryption_statusbar(*args):
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
 	key = ircrypt_keys.get('%s/%s' % (server, channel))
 	if key:
-		return weechat.config_string(ircrypt_config_option['encrypted'])
+		marker = weechat.config_string(ircrypt_config_option['encrypted'])
+		if marker == '{{cipher}}':
+			return weechat.config_string(ircrypt_config_option['sym_cipher'])
+		else:
+			return marker
 	else:
 		return ''
 
