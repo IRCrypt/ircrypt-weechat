@@ -688,6 +688,11 @@ def ircrypt_keyex_receive_key(servername, args, info):
 
 	# Parse channel/key
 	channel, key = decrypted.split(' ', 1)
+
+	# if channel is own nick, change channel to the nick of the sender
+	if channel == weechat.info_get('irc_nick',servername):
+		channel = info['nick']
+
 	target = '%s/%s' % (servername, channel)
 	ircrypt_keys[target] = key
 	weechat.prnt(buffer, 'set key for %s' % target)
