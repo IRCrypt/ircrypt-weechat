@@ -59,7 +59,9 @@
 # Configuration
 #
 # You can add 'ircrypt' to weechat.bar.status.items to have an indication that
-# the message you are going to send is encrypted.
+# the message you are going to send is encrypted. If the marker for encrytion
+# is set to {{cipher}} the global used chipher is added to the
+# weechat.bar.status.items
 
 #
 # == Project ================================================================
