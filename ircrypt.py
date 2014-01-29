@@ -493,10 +493,24 @@ def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. In particular, this will
 	handle the setting and removal of passphrases for channels.
 	'''
-	global ircrypt_keys
+	global ircrypt_keys, ircrypt_asym_id
 
 	if args == '' or args == 'list':
-		#ircrypt_list_keys(buffer)
+
+		# find buffer
+		channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
+		server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
+		buf = weechat.buffer_search('irc', '%s.%s' % (server,channel))
+		
+		weechat.prnt(buf,'\nKeys:')
+		for servchan,key in ircrypt_keys.iteritems():
+			weechat.prnt(buf,'%s : %s' % (servchan, key))
+
+		weechat.prnt(buf,'\nUser Ids:')
+		for servchan,ids in ircrypt_asym_id.iteritems():
+			weechat.prnt(buf,'%s : %s' % (servchan, ids))
+		
+		weechat.prnt(buf,'\n')
 		return weechat.WEECHAT_RC_OK
 
 	argv = [a for a in args.split(' ') if a]
