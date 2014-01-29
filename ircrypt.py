@@ -144,6 +144,10 @@ def decrypt(data, msgtype, servername, args):
 			return ''
 
 		return decrypt_asym(servername, args, info)
+	
+	# Check if channel is own nick and if change channel to nick of sender
+	if info['channel'][0] not in '#&':
+		info['channel'] = info['nick']
 
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
 	if key:
