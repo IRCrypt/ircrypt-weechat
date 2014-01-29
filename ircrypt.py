@@ -93,6 +93,7 @@ ircrypt_config_section = {}
 ircrypt_config_option = {}
 ircrypt_keys = {}
 ircrypt_asym_id = {}
+ircrypt_received_keys = {}
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -143,7 +144,7 @@ def keyex_sendkey (nick, channel, servername):
 	p = subprocess.Popen(['gpg2', '--sign', '--encrypt', '-r',
 		key_id, '--batch', '--no-tty'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 		stderr=subprocess.PIPE)
-	p.stdin.write(key)
+	p.stdin.write('%s %s' % (channel, key))
 	p.stdin.close()
 	encrypted = base64.b64encode(p.stdout.read())
 	p.stdout.close()
@@ -178,7 +179,7 @@ def decrypt(data, msgtype, servername, args):
 	if '>ACRY-' in args:
 		if not weechat.config_boolean(
 				weechat.config_get('ircrypt.cipher.asym_enabled')):
-			if '>ACRY-0 ' in args:
+			if '>2CRY-0 ' in args:
 				weechat.command('','/notice %s >UCRY-CIPHER-NOT-FOUND' % info['nick'])
 			return ''
 
@@ -623,12 +624,84 @@ def ircrypt_encryption_statusbar(*args):
 		return ''
 
 
+def ircrypt_notice_hook(data, msgtype, servername, args):
+
+	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
+
+	# Check for error messages
+	if '>UCRY-' in args:
+		# TODO: Add error handler
+		return args
+
+
+
+	if '>2CRY-' in args:
+		return ircrypt_keyex_receive_key(servername, args, info)
+
+	return args
+
+
+
+def ircrypt_keyex_receive_key(servername, args, info):
+	global ircrypt_msg_buffer, ircrypt_config_option, ircrypt_received_keys
+
+	pre, message    = string.split(args, '>2CRY-', 1)
+	number, message = string.split(message, ' ', 1 )
+
+	# Get key for the message buffer
+	buf_key = '%s.%s.%s.keyex' % (servername, info['channel'], info['nick'])
+
+	# Decrypt only if we got the last part of the message
+	# otherwise put the message into a global buffer and quit
+	if int(number) != 0:
+		if not buf_key in ircrypt_msg_buffer:
+			ircrypt_msg_buffer[buf_key] = MessageParts()
+		ircrypt_msg_buffer[buf_key].update(int(number), message)
+		return ''
+
+	# Get whole message
+	try:
+		message = message + ircrypt_msg_buffer[buf_key].message
+	except KeyError:
+		pass
+
+	# Decrypt
+	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'],
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	p.stdin.write(base64.b64decode(message))
+	p.stdin.close()
+	decrypted = p.stdout.read()
+	p.stdout.close()
+
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+
+	# Remove old messages from buffer
+	try:
+		del ircrypt_msg_buffer[buf_key]
+	except KeyError:
+		pass
+
+	# Parse channel/key
+	channel, key = decrypted.split(' ', 1)
+	target = '%s/%s' % (servername, channel)
+	ircrypt_keys[target] = key
+	weechat.prnt(buffer, 'set key for %s' % target)
+
+	return '%s%s' % (pre, decrypted)
+
+
 # register plugin
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 	# register the modifiers
-	weechat.hook_modifier('irc_in_privmsg', 'decrypt', '')
+	weechat.hook_modifier('irc_in_privmsg',  'decrypt', '')
 	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
+	weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
 
 	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
 			'[list] '
