@@ -690,7 +690,8 @@ def ircrypt_keyex_receive_key(servername, args, info):
 	channel, key = decrypted.split(' ', 1)
 	target = '%s/%s' % (servername, channel)
 	ircrypt_keys[target] = key
-	weechat.prnt(buffer, 'set key for %s' % target)
+	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+	weechat.prnt(buf, 'set key for %s' % target)
 
 	return '%s%s' % (pre, decrypted)
 
