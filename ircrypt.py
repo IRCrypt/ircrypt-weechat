@@ -549,10 +549,11 @@ def ircrypt_command(data, buffer, args):
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		if target not in ircrypt_keys:
-			return weechat.WEECHAT_RC_ERROR
+			weechat.prnt(buffer, 'No existing key for %s.' % target)
+			return weechat.WEECHAT_RC_OK
 
 		del ircrypt_keys[target]
-		weechat.prnt(buffer, 'removed key for %s' % target)
+		weechat.prnt(buffer, 'Removed key for %s' % target)
 		return weechat.WEECHAT_RC_OK
 
 	# Set asymmetric ids
