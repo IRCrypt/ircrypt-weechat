@@ -144,7 +144,7 @@ def decrypt(data, msgtype, servername, args):
 			return ''
 
 		return decrypt_asym(servername, args, info)
-	
+
 	# Check if channel is own nick and if change channel to nick of sender
 	if info['channel'][0] not in '#&':
 		info['channel'] = info['nick']
@@ -507,7 +507,7 @@ def ircrypt_command(data, buffer, args):
 		channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
 		server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
 		buf = weechat.buffer_search('irc', '%s.%s' % (server,channel))
-		
+
 		weechat.prnt(buf,'\nKeys:')
 		for servchan,key in ircrypt_keys.iteritems():
 			weechat.prnt(buf,'%s : %s' % (servchan, key))
@@ -515,7 +515,7 @@ def ircrypt_command(data, buffer, args):
 		weechat.prnt(buf,'\nUser Ids:')
 		for servchan,ids in ircrypt_asym_id.iteritems():
 			weechat.prnt(buf,'%s : %s' % (servchan, ids))
-		
+
 		weechat.prnt(buf,'\n')
 		return weechat.WEECHAT_RC_OK
 
