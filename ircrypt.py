@@ -739,13 +739,16 @@ def ircrypt_keyex_receive_key(servername, args, info):
 	p.stderr.close()
 	if err:
 		#buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
-		weechat.prnt('', 'GPG reported error:\n%s' % err)
+		weechat.prnt(ircrypt_get_buffer(), '%s' % err)
 
 	# Remove old messages from buffer
 	try:
 		del ircrypt_msg_buffer[buf_key]
 	except KeyError:
 		pass
+
+	if not decrypted:
+		return ''
 
 	# Parse channel/key
 	channel, key = decrypted.split(' ', 1)
@@ -757,10 +760,10 @@ def ircrypt_keyex_receive_key(servername, args, info):
 	target = '%s/%s' % (servername, channel)
 	ircrypt_keys[target] = key
 	
-	weechat.prnt(ircrypt_get_buffer(), 'receive key for %s from %s/%s' %
+	weechat.prnt(ircrypt_get_buffer(), 'Received key for %s from %s/%s' %
 			(channel, servername, info['nick']))
 
-	return '%s%s' % (pre, decrypted)
+	return ''
 
 
 # register plugin
