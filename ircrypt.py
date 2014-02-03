@@ -192,7 +192,7 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 
 	for i in range(1 + (len(encrypted) / 400))[::-1]:
 		msg = '>2CRY-%i %s' % (i, encrypted[i*400:(i+1)*400])
-		weechat.command('','/notice -server %s %s %s' % (servername, nick, msg))
+		weechat.command('','/mute -all notice -server %s %s %s' % (servername, nick, msg))
 
 	weechat.prnt(ircrypt_get_buffer(), 'Sent key for %s to %s/%s' % \
 			(channel, servername, nick))
