@@ -96,6 +96,7 @@ ircrypt_config_option = {}
 ircrypt_keys = {}
 ircrypt_asym_id = {}
 ircrypt_received_keys = {}
+ircrypt_buffer = None
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -121,7 +122,38 @@ class MessageParts:
 		self.message = msg + self.message
 		self.modified = time.time()
 
-def keyex_sendkey (nick, channel, servername):
+
+# callback for data received in input
+def ircrypt_buffer_input_cb(data, buffer, input_data):
+	return weechat.WEECHAT_RC_OK
+
+# callback called when buffer is closed
+def ircrypt_buffer_close_cb(data, buffer):
+	global ircrypt_buffer
+	ircrypt_buffer = None
+	return weechat.WEECHAT_RC_OK
+
+
+def ircrypt_get_buffer():
+	global ircrypt_buffer
+
+	if ircrypt_buffer:
+		return ircrypt_buffer
+
+	# create buffer
+	ircrypt_buffer = weechat.buffer_new('*icrypt', 'ircrypt_buffer_input_cb',
+			'', 'ircrypt_buffer_close_cb', '')
+
+	# set title
+	weechat.buffer_set(ircrypt_buffer, 'title', 'IRCrypt Key Exchange')
+
+	# disable logging, by setting local variable "no_log" to "1"
+	weechat.buffer_set(ircrypt_buffer, 'localvar_set_no_log', '1')
+
+	return ircrypt_buffer
+
+
+def ircrypt_keyex_sendkey(nick, channel, servername):
 
 	# If no server was set, use the active one
 	if not servername:
@@ -161,6 +193,10 @@ def keyex_sendkey (nick, channel, servername):
 	for i in range(1 + (len(encrypted) / 400))[::-1]:
 		msg = '>2CRY-%i %s' % (i, encrypted[i*400:(i+1)*400])
 		weechat.command('','/notice -server %s %s %s' % (servername, nick, msg))
+
+	weechat.prnt(ircrypt_get_buffer(), 'Sent key for %s to %s/%s' % \
+			(channel, servername, nick))
+
 	return weechat.WEECHAT_RC_OK
 
 
@@ -578,12 +614,12 @@ def ircrypt_command(data, buffer, args):
 
 	target = '%s/%s' % (server_name, argv[1])
 
-	# Set keys
+	# Ask for a key
 	if argv[0] == 'exchange':
 		if len(argv) == 2:
-			return keyex_sendkey(argv[1], None, server_name)
+			return ircrypt_keyex_sendkey(argv[1], None, server_name)
 		if len(argv) == 3:
-			return keyex_sendkey(argv[1], argv[2], server_name)
+			return ircrypt_keyex_sendkey(argv[1], argv[2], server_name)
 		return weechat.WEECHAT_RC_ERROR
 
 	# Set keys
