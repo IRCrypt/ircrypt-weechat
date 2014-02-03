@@ -59,7 +59,9 @@
 # Configuration
 #
 # You can add 'ircrypt' to weechat.bar.status.items to have an indication that
-# the message you are going to send is encrypted.
+# the message you are going to send is encrypted. If the marker for encrytion
+# is set to {{cipher}} the global used chipher is added to the
+# weechat.bar.status.items
 
 #
 # == Project ================================================================
@@ -184,6 +186,10 @@ def decrypt(data, msgtype, servername, args):
 			return ''
 
 		return decrypt_asym(servername, args, info)
+
+	# Check if channel is own nick and if change channel to nick of sender
+	if info['channel'][0] not in '#&':
+		info['channel'] = info['nick']
 
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
 	if key:
@@ -535,10 +541,24 @@ def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. In particular, this will
 	handle the setting and removal of passphrases for channels.
 	'''
-	global ircrypt_keys
+	global ircrypt_keys, ircrypt_asym_id
 
 	if args == '' or args == 'list':
-		#ircrypt_list_keys(buffer)
+
+		# find buffer
+		channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
+		server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
+		buf = weechat.buffer_search('irc', '%s.%s' % (server,channel))
+
+		weechat.prnt(buf,'\nKeys:')
+		for servchan,key in ircrypt_keys.iteritems():
+			weechat.prnt(buf,'%s : %s' % (servchan, key))
+
+		weechat.prnt(buf,'\nUser Ids:')
+		for servchan,ids in ircrypt_asym_id.iteritems():
+			weechat.prnt(buf,'%s : %s' % (servchan, ids))
+
+		weechat.prnt(buf,'\n')
 		return weechat.WEECHAT_RC_OK
 
 	argv = [a for a in args.split(' ') if a]
@@ -579,10 +599,11 @@ def ircrypt_command(data, buffer, args):
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		if target not in ircrypt_keys:
-			return weechat.WEECHAT_RC_ERROR
+			weechat.prnt(buffer, 'No existing key for %s.' % target)
+			return weechat.WEECHAT_RC_OK
 
 		del ircrypt_keys[target]
-		weechat.prnt(buffer, 'removed key for %s' % target)
+		weechat.prnt(buffer, 'Removed key for %s' % target)
 		return weechat.WEECHAT_RC_OK
 
 	# Set asymmetric ids
@@ -619,7 +640,11 @@ def ircrypt_encryption_statusbar(*args):
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
 	key = ircrypt_keys.get('%s/%s' % (server, channel))
 	if key:
-		return weechat.config_string(ircrypt_config_option['encrypted'])
+		marker = weechat.config_string(ircrypt_config_option['encrypted'])
+		if marker == '{{cipher}}':
+			return weechat.config_string(ircrypt_config_option['sym_cipher'])
+		else:
+			return marker
 	else:
 		return ''
 
