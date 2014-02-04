@@ -95,6 +95,7 @@ ircrypt_config_section = {}
 ircrypt_config_option = {}
 ircrypt_keys = {}
 ircrypt_asym_id = {}
+ircrypt_cipher = {}
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -313,10 +314,16 @@ def encrypt_sym(servername, args, info, key):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
+
+	global ircrypt_cipher
+
+	cipher = ircrypt_cipher.get('%s/%s' % (servername, info['channel']),
+			weechat.config_string(ircrypt_config_option['sym_cipher']))
+
 	pre, message = string.split(args, ':', 1)
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet',
 		'--symmetric', '--cipher-algo',
-		weechat.config_string(ircrypt_config_option['sym_cipher']),
+		cipher,
 		'--passphrase-fd', '-'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
@@ -380,7 +387,8 @@ def ircrypt_config_init():
 
 	# marker
 	ircrypt_config_section['marker'] = weechat.config_new_section(
-			ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '', '', '')
+			ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '',
+			'', '')
 	if not ircrypt_config_section['marker']:
 		weechat.config_free(ircrypt_config_file)
 		return
@@ -395,7 +403,8 @@ def ircrypt_config_init():
 
 	# cipher options
 	ircrypt_config_section['cipher'] = weechat.config_new_section(
-			ircrypt_config_file, 'cipher', 0, 0, '', '', '', '', '', '', '', '', '', '')
+			ircrypt_config_file, 'cipher', 0, 0, '', '', '', '', '', '', '', '',
+			'', '')
 	if not ircrypt_config_section['cipher']:
 		weechat.config_free(ircrypt_config_file)
 		return
@@ -404,24 +413,32 @@ def ircrypt_config_init():
 			'sym_cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
 			'TWOFISH', 'TWOFISH', 0, '', '', '', '', '', '')
 	ircrypt_config_option['asym_enabled'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['cipher'],
-			'asym_enabled', 'boolean', 'If asymmetric encryption is used for message encryption', '', 0, 0,
+			ircrypt_config_file, ircrypt_config_section['cipher'], 'asym_enabled',
+			'boolean', 'If asymmetric encryption is used for message encryption',
+			'', 0, 0,
 			'off', 'off', 0, '', '', '', '', '', '')
 
 	# keys
 	ircrypt_config_section['keys'] = weechat.config_new_section(
 			ircrypt_config_file, 'keys', 0, 0, 'ircrypt_config_keys_read_cb', '',
-			'ircrypt_config_keys_write_cb', '', '',
-		'', '', '', '', '')
+			'ircrypt_config_keys_write_cb', '', '', '', '', '', '', '')
 	if not ircrypt_config_section['keys']:
 		weechat.config_free(ircrypt_config_file)
 
 	# Asymmetric key identifier
 	ircrypt_config_section['asym_id'] = weechat.config_new_section(
-			ircrypt_config_file, 'asym_id', 0, 0, 'ircrypt_config_asym_id_read_cb', '',
-			'ircrypt_config_asym_id_write_cb', '', '',
-		'', '', '', '', '')
+			ircrypt_config_file, 'asym_id', 0, 0,
+			'ircrypt_config_asym_id_read_cb', '',
+			'ircrypt_config_asym_id_write_cb', '', '', '', '', '', '', '')
 	if not ircrypt_config_section['asym_id']:
+		weechat.config_free(ircrypt_config_file)
+
+	# Special Ciphers
+	ircrypt_config_section['special_cipher'] = weechat.config_new_section(
+			ircrypt_config_file, 'special_cipher', 0, 0,
+			'ircrypt_config_special_cipher_read_cb', '',
+			'ircrypt_config_special_cipher_write_cb', '', '', '', '', '', '', '')
+	if not ircrypt_config_section['special_cipher']:
 		weechat.config_free(ircrypt_config_file)
 
 
@@ -495,11 +512,39 @@ def ircrypt_config_asym_id_write_cb(data, config_file, section_name):
 
 	return weechat.WEECHAT_RC_OK
 
+
+def ircrypt_config_special_cipher_read_cb(data, config_file, section_name,
+		option_name, value):
+	'''Read elements of the key section from the configuration file.
+	'''
+	global ircrypt_cipher
+
+	if not weechat.config_new_option(config_file, section_name, option_name,
+			'string', 'special_cipher', '', 0, 0, '', value, 0, '', '', '', '',
+			'', ''):
+		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
+
+	ircrypt_cipher[option_name] = value
+	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
+
+
+def ircrypt_config_special_cipher_write_cb(data, config_file, section_name):
+	'''Write passphrases to the key section of the configuration file.
+	'''
+	global ircrypt_cipher
+
+	weechat.config_write_line(config_file, section_name, '')
+	for target, cipher in sorted(ircrypt_cipher.iteritems()):
+		weechat.config_write_line(config_file, target, cipher)
+
+	return weechat.WEECHAT_RC_OK
+
+
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. In particular, this will
 	handle the setting and removal of passphrases for channels.
 	'''
-	global ircrypt_keys, ircrypt_asym_id
+	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
 
 	if args == '' or args == 'list':
 
@@ -515,6 +560,10 @@ def ircrypt_command(data, buffer, args):
 		weechat.prnt(buf,'\nUser Ids:')
 		for servchan,ids in ircrypt_asym_id.iteritems():
 			weechat.prnt(buf,'%s : %s' % (servchan, ids))
+
+		weechat.prnt(buf,'\nSpecial Cipher:')
+		for servchan,spcip in ircrypt_cipher.iteritems():
+			weechat.prnt(buf,'%s : %s' % (servchan, spcip))
 
 		weechat.prnt(buf,'\n')
 		return weechat.WEECHAT_RC_OK
@@ -564,7 +613,7 @@ def ircrypt_command(data, buffer, args):
 		weechat.prnt(buffer, 'set asymmetric identifier for %s' % target)
 		return weechat.WEECHAT_RC_OK
 
-	# Remove keys
+	# Remove asymmetric ids
 	if argv[0] == 'remove-pub':
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
@@ -573,6 +622,25 @@ def ircrypt_command(data, buffer, args):
 
 		del ircrypt_asym_id[target]
 		weechat.prnt(buffer, 'removed asymmetric identifier for %s' % target)
+		return weechat.WEECHAT_RC_OK
+
+	# Set special cipher for channel
+	if argv[0] == 'set-cip':
+		if len(argv) != 3:
+			return weechat.WEECHAT_RC_ERROR
+		ircrypt_cipher[target] = argv[2]
+		weechat.prnt(buffer, 'set special cipher %s for  %s' % (argv[2], target))
+		return weechat.WEECHAT_RC_OK
+
+	# Remove secial cipher for channel
+	if argv[0] == 'remove-cip':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		if target not in ircrypt_cipher:
+			return weechat.WEECHAT_RC_ERROR
+
+		del ircrypt_cipher[target]
+		weechat.prnt(buffer, 'removed special cipher for %s' % target)
 		return weechat.WEECHAT_RC_OK
 
 	# Error if command was unknown
@@ -585,18 +653,18 @@ def ircrypt_update_encryption_status(data, signal, signal_data):
 
 
 def ircrypt_encryption_statusbar(*args):
-	#channel = weechat.buffer_get_string(weechat.current_buffer(), "short_name")
+	global ircrypt_cipher
+
 	channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
 	key = ircrypt_keys.get('%s/%s' % (server, channel))
 	if key:
 		marker = weechat.config_string(ircrypt_config_option['encrypted'])
 		if marker == '{{cipher}}':
-			return weechat.config_string(ircrypt_config_option['sym_cipher'])
-		else:
-			return marker
-	else:
-		return ''
+			return ircrypt_cipher.get('%s/%s' % (server, channel),
+					weechat.config_string(ircrypt_config_option['sym_cipher']))
+		return marker
+	return ''
 
 
 # register plugin
@@ -610,9 +678,12 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'[list] | set [-server <server>] <target> <key> '
 			'| remove [-server <server>] <target>'
 			'| set-pub [-server <server>] <nick> <id>'
-			'| remove-pub [-server <server>] <nick>',
+			'| remove-pub [-server <server>] <nick>'
+			'| set-cip [-server <server>] <channel> <cipher>'
+			'| remove-cip [-server <server>] <channel>',
 			'Add, change or remove key for target and \n'
 			'Add, change or remove public key identifier for nick.\n'
+			'Add, change or remove special cipher for channel.\n'
 			'Target can be a channel or a nick.\n\n'
 			'Examples:\n'
 			'Set the key for a channel:'
@@ -626,7 +697,9 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'list || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| set-pub %(nicks)|-server %(irc_servers) %- '
-			'|| remove-pub |%(nicks)|-server %(irc_servers) %-',
+			'|| remove-pub |%(nicks)|-server %(irc_servers) %-'
+			'|| set-cip %(irc_channel)|-server %(irc_servers) %- '
+			'|| remove-cip |%(irc_channel)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
 
 	ircrypt_config_init()
