@@ -314,10 +314,15 @@ def encrypt_sym(servername, args, info, key):
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
+
+	global ircrypt_cipher
+
+	cipher = ircrypt_cipher.get('%s/%s' % (servername, info['channel']), weechat.config_string(ircrypt_config_option['sym_cipher']))
+
 	pre, message = string.split(args, ':', 1)
 	p = subprocess.Popen(['gpg', '--batch',  '--no-tty', '--quiet',
 		'--symmetric', '--cipher-algo',
-		weechat.config_string(ircrypt_config_option['sym_cipher']),
+		cipher,
 		'--passphrase-fd', '-'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
@@ -550,6 +555,10 @@ def ircrypt_command(data, buffer, args):
 		for servchan,ids in ircrypt_asym_id.iteritems():
 			weechat.prnt(buf,'%s : %s' % (servchan, ids))
 		
+		weechat.prnt(buf,'\nSpecial Cipher:')
+		for servchan,spcip in ircrypt_cipher.iteritems():
+			weechat.prnt(buf,'%s : %s' % (servchan, spcip))
+
 		weechat.prnt(buf,'\n')
 		return weechat.WEECHAT_RC_OK
 
@@ -637,6 +646,9 @@ def ircrypt_update_encryption_status(data, signal, signal_data):
 
 
 def ircrypt_encryption_statusbar(*args):
+
+	global ircrypt_cipher
+
 	#channel = weechat.buffer_get_string(weechat.current_buffer(), "short_name")
 	channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
@@ -644,7 +656,7 @@ def ircrypt_encryption_statusbar(*args):
 	if key:
 		marker = weechat.config_string(ircrypt_config_option['encrypted'])
 		if marker == '{{cipher}}':
-			return weechat.config_string(ircrypt_config_option['sym_cipher'])
+			return ircrypt_cipher.get('%s/%s' % (server, channel), weechat.config_string(ircrypt_config_option['sym_cipher']))
 		else:
 			return marker
 	else:
