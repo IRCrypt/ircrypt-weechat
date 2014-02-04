@@ -653,18 +653,25 @@ def ircrypt_update_encryption_status(data, signal, signal_data):
 
 
 def ircrypt_encryption_statusbar(*args):
+	'''This method will set the “ircrypt” element of the status bar if
+	encryption is enabled for the current channel. The placeholder {{cipher}}
+	can be used, which will be replaced with the cipher used for the current
+	channel.
+	'''
 	global ircrypt_cipher
 
 	channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
 	key = ircrypt_keys.get('%s/%s' % (server, channel))
-	if key:
-		marker = weechat.config_string(ircrypt_config_option['encrypted'])
-		if marker == '{{cipher}}':
-			return ircrypt_cipher.get('%s/%s' % (server, channel),
-					weechat.config_string(ircrypt_config_option['sym_cipher']))
-		return marker
-	return ''
+
+	# Return nothing if no key is set for current channel
+	if not key:
+		return ''
+
+	# Return marer, but replace {{cipher}} with used cipher for current channel
+	return weechat.config_string(ircrypt_config_option['encrypted']).replace(
+			'{{cipher}}', ircrypt_cipher.get('%s/%s' % (server, channel),
+				weechat.config_string(ircrypt_config_option['sym_cipher'])))
 
 
 # register plugin
