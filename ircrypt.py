@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2013
+# Copyright 2013-2014
 #    Lars Kiesow   <lkiesow@uos.de>
 #    Sven Haardiek <sven@haardiek.de>
 # All rights reserved.
@@ -81,7 +81,7 @@
 
 SCRIPT_NAME    = 'IRCrypt'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
-SCRIPT_VERSION = '0.1'
+SCRIPT_VERSION = 'SNAPSHOT'
 SCRIPT_LICENSE = 'FreeBSD License'
 SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
 
