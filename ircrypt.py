@@ -97,7 +97,7 @@ ircrypt_keys = {}
 ircrypt_asym_id = {}
 ircrypt_received_keys = {}
 ircrypt_buffer = None
-ircrypt_request = []
+ircrypt_request = set()
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -126,6 +126,15 @@ class MessageParts:
 
 # callback for data received in input
 def ircrypt_buffer_input_cb(data, buffer, input_data):
+
+	global ircrypt_request
+
+	argv = input_data.split()
+
+	if argv[0] == 'cancel':
+		ircrypt_request = set()
+		weechat.prnt(buffer,'All requests are canceled.')
+	
 	return weechat.WEECHAT_RC_OK
 
 # callback called when buffer is closed
@@ -187,11 +196,11 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 	if not encrypted:
 		return weechat.WEECHAT_RC_ERROR
 
-	for i in xrange(1 + (len(encrypted) / 300))[::-1]:
+	for i in range(1 + (len(encrypted) / 300))[::-1]:
 		msg = '>WCRY-%i %s' % (i, encrypted[i*300:(i+1)*300])
 		weechat.command('','/mute -all notice -server %s %s %s' % (servername, nick, msg))
 
-	ircrypt_request.append('%s.%s.%s' % (channel, servername, nick))
+	ircrypt_request.add('%s.%s.%s' % (channel, servername, nick))
 
 	weechat.prnt(ircrypt_get_buffer(), 'Ask %s for key of channel %s/%s. Waiting for answer...' % \
 			(nick, servername, channel))
