@@ -98,6 +98,7 @@ ircrypt_asym_id = {}
 ircrypt_received_keys = {}
 ircrypt_buffer = None
 ircrypt_request = set()
+ircrypt_request_buffer = {}
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -207,10 +208,40 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 
 	return weechat.WEECHAT_RC_OK
 
-def ircrypt_keyex_getask(servername, args, info):
 
-	weechat.prnt(ircrypt_get_buffer(), 'WTF!!!')
+def ircrypt_keyex_get_request(servername, args, info):
+	global ircrypt_request_buffer
+
+	pre, message    = args.split('>WCRY-', 1)
+	number, message = message.split(' ', 1)
+
+	# Get key for the request buffer
+	buf_key = (servername, info['channel'], info['nick'])
+
+	# Check if we got the last part of the message otherwise put the message
+	# into a global buffer and quit
+	if int(number):
+		if not buf_key in ircrypt_request_buffer:
+			# - First element is list of requests
+			# - Second element is currently received request
+			ircrypt_request_buffer[buf_key] = [[], MessageParts()]
+		else:
+			# Add parts to current request
+			ircrypt_request_buffer[buf_key][1].update(int(number), message)
+		return ''
+	else:
+		# We got the last part
+		ircrypt_request_buffer[buf_key][0].append(
+				message + ircrypt_request_buffer[buf_key][1].message )
+		ircrypt_request_buffer[buf_key][1] = MessageParts()
+
+	weechat.prnt(ircrypt_get_buffer(), 'Received key request from nick %s/%s' %
+			(servername, info['nick']))
+	weechat.prnt(ircrypt_get_buffer(), 'Type verify [-server server] [nick] to'
+			' verify the signature on this request.')
+
 	return ''
+
 
 def ircrypt_keyex_sendkey(nick, channel, servername):
 
@@ -752,9 +783,9 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 	if '>UCRY-' in args:
 		# TODO: Add error handler
 		return args
-	
+
 	if '>WCRY-' in args:
-		return ircrypt_keyex_getask(servername, args, info)
+		return ircrypt_keyex_get_request(servername, args, info)
 
 	if '>2CRY-' in args:
 		return ircrypt_keyex_receive_key(servername, args, info)
@@ -819,7 +850,7 @@ def ircrypt_keyex_receive_key(servername, args, info):
 
 	target = '%s/%s' % (servername, channel)
 	ircrypt_keys[target] = key
-	
+
 	weechat.prnt(ircrypt_get_buffer(), 'Received key for %s from %s/%s' %
 			(channel, servername, info['nick']))
 
