@@ -97,6 +97,7 @@ ircrypt_keys = {}
 ircrypt_asym_id = {}
 ircrypt_received_keys = {}
 ircrypt_buffer = None
+ircrypt_request = []
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -152,6 +153,55 @@ def ircrypt_get_buffer():
 
 	return ircrypt_buffer
 
+def ircrypt_keyex_askkey(nick, channel, servername):
+
+	global ircrypt_request,ircrypt_asym_id
+
+	# If no server was set, use the active one
+	if not servername:
+		servername = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
+
+	# If no channel was set, assume that it is for a private conversation and
+	# set it to the other persons nick.
+	if not channel:
+		channel = nick
+
+	key_id = ircrypt_asym_id.get('%s/%s' % (servername, nick))
+
+	if not key_id:
+		weechat.prnt('', 'There is no ID for this Nick.')
+		return weechat.WEECHAT_RC_OK
+
+	p = subprocess.Popen(['gpg2', '--sign', '--encrypt', '-r',
+		key_id, '--batch', '--no-tty'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+		stderr=subprocess.PIPE)
+	p.stdin.write(channel)
+	p.stdin.close()
+	encrypted = base64.b64encode(p.stdout.read())
+	p.stdout.close()
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		weechat.prnt(ircrypt_get_buffer(), err)
+	if not encrypted:
+		return weechat.WEECHAT_RC_ERROR
+
+	for i in xrange(1 + (len(encrypted) / 300))[::-1]:
+		msg = '>WCRY-%i %s' % (i, encrypted[i*300:(i+1)*300])
+		weechat.command('','/mute -all notice -server %s %s %s' % (servername, nick, msg))
+
+	ircrypt_request.append('%s.%s.%s' % (channel, servername, nick))
+
+	weechat.prnt(ircrypt_get_buffer(), 'Ask %s for key of channel %s/%s. Waiting for answer...' % \
+			(nick, servername, channel))
+
+	return weechat.WEECHAT_RC_OK
+
+def ircrypt_keyex_getask(servername, args, info):
+
+	weechat.prnt(ircrypt_get_buffer(), 'WTF!!!')
+	return ''
 
 def ircrypt_keyex_sendkey(nick, channel, servername):
 
@@ -617,9 +667,9 @@ def ircrypt_command(data, buffer, args):
 	# Ask for a key
 	if argv[0] == 'exchange':
 		if len(argv) == 2:
-			return ircrypt_keyex_sendkey(argv[1], None, server_name)
+			return ircrypt_keyex_askkey(argv[1], None, server_name)
 		if len(argv) == 3:
-			return ircrypt_keyex_sendkey(argv[1], argv[2], server_name)
+			return ircrypt_keyex_askkey(argv[1], argv[2], server_name)
 		return weechat.WEECHAT_RC_ERROR
 
 	# Set keys
@@ -693,8 +743,9 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 	if '>UCRY-' in args:
 		# TODO: Add error handler
 		return args
-
-
+	
+	if '>WCRY-' in args:
+		return ircrypt_keyex_getask(servername, args, info)
 
 	if '>2CRY-' in args:
 		return ircrypt_keyex_receive_key(servername, args, info)
