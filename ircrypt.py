@@ -98,7 +98,9 @@ ircrypt_asym_id = {}
 ircrypt_received_keys = {}
 ircrypt_buffer = None
 ircrypt_request = set()
+ircrypt_pending_requests = []
 ircrypt_request_buffer = {}
+
 
 class MessageParts:
 	'''Class used for storing parts of messages which were splitted after
@@ -128,14 +130,88 @@ class MessageParts:
 # callback for data received in input
 def ircrypt_buffer_input_cb(data, buffer, input_data):
 
-	global ircrypt_request
+	global ircrypt_pending_requests
 
 	argv = input_data.split()
 
-	if argv[0] == 'cancel':
-		ircrypt_request = set()
-		weechat.prnt(buffer,'All requests are canceled.')
+	if argv[0] == 'verify':
+		requests = ircrypt_pending_requests
+
+		# Remove marker from all pending requests
+		for req in filter(lambda x: x[3], requests):
+			req[3] = False
+
+		if len(argv) == 3:
+			server = argv[1]
+			nick   = argv[2]
+			requests = filter(lambda x: x[0] == server and x[1] == nick,
+					ircrypt_pending_requests)
+		for req in requests:
+			server = req[0]
+			nick   = req[1]
+			# Decrypt and show signature
+			p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet',
+				'-d'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+				stderr=subprocess.PIPE)
+			p.stdin.write(base64.b64decode(req[2]))
+			p.stdin.close()
+			channel = p.stdout.read()
+			p.stdout.close()
+
+			# if channel is own nick, change channel to the nick of the sender
+			if channel == weechat.info_get('irc_nick',server):
+				channel = nick
+			
+			# Mark request
+			req[3] = channel
+
+			# Get and print GPG errors/warnings
+			err = p.stderr.read()
+			p.stderr.close()
+			weechat.prnt(buffer, '%s requested key for channel %s (server %s)' % \
+					(nick, channel, server))
+			# We need a test of signature
+			weechat.prnt(buffer, '%s' % err)
+			weechat.prnt(buffer, 'What do you want to do? [accept | decline | cancel]')
+			return weechat.WEECHAT_RC_OK
+
+	if argv == ['cancel']:
+		# Remove marker from all pending requests
+		for req in filter(lambda x: x[3], ircrypt_pending_requests):
+			req[3] = False
+		weechat.prnt(buffer, 'Canceled.')
 	
+	if argv == ['decline']:
+		
+		#TODO send decline with servername and channel to nick with >UCRY-
+				
+		for i in range(len(ircrypt_pending_requests)):
+			if ircrypt_pending_requests[i][3]:
+				weechat.prnt(buffer, 'Declined %s\'s request for channel %s (server %s).' % \
+						(ircrypt_pending_requests[i][1],
+						ircrypt_pending_requests[i][3],
+						ircrypt_pending_requests[i][0]))
+				del ircrypt_pending_requests[i]
+				return weechat.WEECHAT_RC_OK
+
+	if argv == ['abort']:
+		ircrypt_request = set()
+		weechat.prnt(buffer,'All requests are aborted.')
+	
+	if argv == ['accept']:
+		for i in range(len(ircrypt_pending_requests)):
+			if ircrypt_pending_requests[i][3]:
+				weechat.prnt(buffer, 'Accepted %s\'s request for channel %s (server %s).' % \
+						(ircrypt_pending_requests[i][1],
+						ircrypt_pending_requests[i][3],
+						ircrypt_pending_requests[i][0]))
+				ircrypt_keyex_sendkey(ircrypt_pending_requests[i][1],
+						ircrypt_pending_requests[i][3],
+						ircrypt_pending_requests[i][0])
+				del ircrypt_pending_requests[i]
+				return weechat.WEECHAT_RC_OK
+
+
 	return weechat.WEECHAT_RC_OK
 
 # callback called when buffer is closed
@@ -210,7 +286,7 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 
 
 def ircrypt_keyex_get_request(servername, args, info):
-	global ircrypt_request_buffer
+	global ircrypt_request_buffer, ircrypt_pending_requests
 
 	pre, message    = args.split('>WCRY-', 1)
 	number, message = message.split(' ', 1)
@@ -224,16 +300,19 @@ def ircrypt_keyex_get_request(servername, args, info):
 		if not buf_key in ircrypt_request_buffer:
 			# - First element is list of requests
 			# - Second element is currently received request
-			ircrypt_request_buffer[buf_key] = [[], MessageParts()]
-		else:
-			# Add parts to current request
-			ircrypt_request_buffer[buf_key][1].update(int(number), message)
+			ircrypt_request_buffer[buf_key] = MessageParts()
+		# Add parts to current request
+		ircrypt_request_buffer[buf_key].update(int(number), message)
 		return ''
 	else:
 		# We got the last part
-		ircrypt_request_buffer[buf_key][0].append(
-				message + ircrypt_request_buffer[buf_key][1].message )
-		ircrypt_request_buffer[buf_key][1] = MessageParts()
+		ircrypt_pending_requests.append( [
+			servername,
+			info['nick'],
+			message + ircrypt_request_buffer[buf_key].message,
+			False
+			] )
+		del ircrypt_request_buffer[buf_key]
 
 	weechat.prnt(ircrypt_get_buffer(), 'Received key request from nick %s/%s' %
 			(servername, info['nick']))
