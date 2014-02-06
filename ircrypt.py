@@ -89,6 +89,8 @@ import weechat, string, os, subprocess, base64
 import time
 
 
+# Global buffers used to store message parts, pending requests, configuration
+# options, keys, etc.
 ircrypt_msg_buffer = {}
 ircrypt_config_file = None
 ircrypt_config_section = {}
@@ -97,8 +99,14 @@ ircrypt_keys = {}
 ircrypt_asym_id = {}
 ircrypt_cipher = {}
 
+
+# Constants used throughout this script
+MAX_PART_LEN     = 300
+MSG_PART_TIMEOUT = 300 # 5min
+
+
 class MessageParts:
-	'''Class used for storing parts of messages which were splitted after
+	'''Class used for storing parts of messages which were split after
 	encryption due to their length.'''
 
 	modified = 0
@@ -114,8 +122,8 @@ class MessageParts:
 		if self.last_id and self.last_id != id+1:
 			self.message = ''
 		# Check if the are old message parts which belong due to their old age
-		# (> 5min) probably not to this message:
-		if time.time() - self.modified > 300:
+		# probably not to this message:
+		if time.time() - self.modified > MSG_PART_TIMEOUT:
 			self.message = ''
 		self.last_id = id
 		self.message = msg + self.message
@@ -341,8 +349,9 @@ def encrypt_sym(servername, args, info, key):
 	output = '%s:>CRY-0 %s' % (pre, encrypted)
 	# Check if encrypted message is to long.
 	# If that is the case, send multiple messages.
-	if len(output) > 400:
-		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[400:], output[:400])
+	if len(output) > MAX_PART_LEN:
+		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[MAX_PART_LEN:],
+				output[:MAX_PART_LEN])
 	return output
 
 
@@ -372,8 +381,9 @@ def encrypt_asym(servername, args, info, key_id):
 		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
-	return '\n'.join(['%s:>ACRY-%i %s' % (pre, i, encrypted[i*400:(i+1)*400])
-		for i in xrange(1 + (len(encrypted) / 400))][::-1])
+	return '\n'.join(['%s:>ACRY-%i %s' % (pre, i,
+		encrypted[i*MAX_PART_LEN:(i+1) * MAX_PART_LEN])
+		for i in xrange(1 + (len(encrypted) / MAX_PART_LEN))][::-1])
 
 
 def ircrypt_config_init():
