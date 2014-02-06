@@ -453,7 +453,7 @@ def ircrypt_config_init():
 
 
 def ircrypt_config_reload_cb(data, config_file):
-	''' Reload config file.
+	'''Handle a reload of the configuration file.
 	'''
 	return weechat.WEECHAT_CONFIG_READ_OK
 
@@ -656,10 +656,6 @@ def ircrypt_command(data, buffer, args):
 	# Error if command was unknown
 	return weechat.WEECHAT_RC_ERROR
 
-
-def ircrypt_update_encryption_status(data, signal, signal_data):
-    weechat.bar_item_update('ircrypt')
-    return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_encryption_statusbar(*args):
