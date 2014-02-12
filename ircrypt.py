@@ -103,7 +103,6 @@ ircrypt_buffer = None
 ircrypt_request = set()
 ircrypt_pending_requests = []
 ircrypt_request_buffer = {}
-
 # Constants used throughout this script
 MAX_PART_LEN     = 300
 MSG_PART_TIMEOUT = 300 # 5min
@@ -356,6 +355,69 @@ def ircrypt_keyex_get_request(servername, args, info):
 			(servername, info['nick']))
 	weechat.prnt(ircrypt_get_buffer(), 'Type verify [-server server] [nick] to'
 			' verify the signature on this request.')
+
+	return ''
+
+
+def ircrypt_keyex_receive_key(servername, args, info):
+	global ircrypt_msg_buffer, ircrypt_config_option, ircrypt_received_keys
+
+	pre, message    = string.split(args, '>2CRY-', 1)
+	number, message = string.split(message, ' ', 1 )
+
+	# Get key for the message buffer
+	buf_key = '%s.%s.%s.keyex' % (servername, info['channel'], info['nick'])
+
+	# Decrypt only if we got the last part of the message
+	# otherwise put the message into a global buffer and quit
+	if int(number) != 0:
+		if not buf_key in ircrypt_msg_buffer:
+			ircrypt_msg_buffer[buf_key] = MessageParts()
+		ircrypt_msg_buffer[buf_key].update(int(number), message)
+		return ''
+
+	# Get whole message
+	try:
+		message = message + ircrypt_msg_buffer[buf_key].message
+	except KeyError:
+		pass
+
+	# Decrypt
+	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'],
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	p.stdin.write(base64.b64decode(message))
+	p.stdin.close()
+	decrypted = p.stdout.read()
+	p.stdout.close()
+
+	# Get and print GPG errors/warnings
+	err = p.stderr.read()
+	p.stderr.close()
+	if err:
+		#buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+		weechat.prnt(ircrypt_get_buffer(), '%s' % err)
+
+	# Remove old messages from buffer
+	try:
+		del ircrypt_msg_buffer[buf_key]
+	except KeyError:
+		pass
+
+	if not decrypted:
+		return ''
+
+	# Parse channel/key
+	channel, key = decrypted.split(' ', 1)
+
+	# if channel is own nick, change channel to the nick of the sender
+	if channel == weechat.info_get('irc_nick',servername):
+		channel = info['nick']
+
+	target = '%s/%s' % (servername, channel)
+	ircrypt_keys[target] = key
+
+	weechat.prnt(ircrypt_get_buffer(), 'Received key for %s from %s/%s' %
+			(channel, servername, info['nick']))
 
 	return ''
 
@@ -1080,70 +1142,6 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 		return ircrypt_keyex_receive_key(servername, args, info)
 
 	return args
-
-
-
-def ircrypt_keyex_receive_key(servername, args, info):
-	global ircrypt_msg_buffer, ircrypt_config_option, ircrypt_received_keys
-
-	pre, message    = string.split(args, '>2CRY-', 1)
-	number, message = string.split(message, ' ', 1 )
-
-	# Get key for the message buffer
-	buf_key = '%s.%s.%s.keyex' % (servername, info['channel'], info['nick'])
-
-	# Decrypt only if we got the last part of the message
-	# otherwise put the message into a global buffer and quit
-	if int(number) != 0:
-		if not buf_key in ircrypt_msg_buffer:
-			ircrypt_msg_buffer[buf_key] = MessageParts()
-		ircrypt_msg_buffer[buf_key].update(int(number), message)
-		return ''
-
-	# Get whole message
-	try:
-		message = message + ircrypt_msg_buffer[buf_key].message
-	except KeyError:
-		pass
-
-	# Decrypt
-	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write(base64.b64decode(message))
-	p.stdin.close()
-	decrypted = p.stdout.read()
-	p.stdout.close()
-
-	# Get and print GPG errors/warnings
-	err = p.stderr.read()
-	p.stderr.close()
-	if err:
-		#buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
-		weechat.prnt(ircrypt_get_buffer(), '%s' % err)
-
-	# Remove old messages from buffer
-	try:
-		del ircrypt_msg_buffer[buf_key]
-	except KeyError:
-		pass
-
-	if not decrypted:
-		return ''
-
-	# Parse channel/key
-	channel, key = decrypted.split(' ', 1)
-
-	# if channel is own nick, change channel to the nick of the sender
-	if channel == weechat.info_get('irc_nick',servername):
-		channel = info['nick']
-
-	target = '%s/%s' % (servername, channel)
-	ircrypt_keys[target] = key
-
-	weechat.prnt(ircrypt_get_buffer(), 'Received key for %s from %s/%s' %
-			(channel, servername, info['nick']))
-
-	return ''
 
 
 # register plugin
