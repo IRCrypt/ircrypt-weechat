@@ -157,14 +157,20 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 	
 	if argv == ['decline']:
 		
-		#TODO send decline with servername and channel to nick with >UCRY-
 				
 		for i in range(len(ircrypt_pending_requests)):
 			if ircrypt_pending_requests[i][3]:
+				
+				nick    = ircrypt_pending_requests[i][1]
+				channel = ircrypt_pending_requests[i][3]
+				server  = ircrypt_pending_requests[i][0]
+				
+				# send decline with servername and channel to nick with >UCRY-
+				weechat.command('','/mute -all notice -server %s %s >UCRY-DECLINE %s %s ' \
+						% (server, nick, server, channel))
+	
 				weechat.prnt(buffer, 'Declined %s\'s request for channel %s (server %s).' % \
-						(ircrypt_pending_requests[i][1],
-						ircrypt_pending_requests[i][3],
-						ircrypt_pending_requests[i][0]))
+						(nick, channel, server))
 				del ircrypt_pending_requests[i]
 				return weechat.WEECHAT_RC_OK
 
