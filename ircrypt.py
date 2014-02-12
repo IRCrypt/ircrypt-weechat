@@ -140,47 +140,14 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 	global ircrypt_pending_requests
 
 	argv = input_data.split()
-
+	
+	if argv[0] == 'list':
+		return ircrypt_command_list()
+	
 	if argv[0] == 'verify':
-		requests = ircrypt_pending_requests
-
-		# Remove marker from all pending requests
-		for req in filter(lambda x: x[3], requests):
-			req[3] = False
-
 		if len(argv) == 3:
-			server = argv[1]
-			nick   = argv[2]
-			requests = filter(lambda x: x[0] == server and x[1] == nick,
-					ircrypt_pending_requests)
-		for req in requests:
-			server = req[0]
-			nick   = req[1]
-			# Decrypt and show signature
-			p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet',
-				'-d'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE)
-			p.stdin.write(base64.b64decode(req[2]))
-			p.stdin.close()
-			channel = p.stdout.read()
-			p.stdout.close()
-
-			# if channel is own nick, change channel to the nick of the sender
-			if channel == weechat.info_get('irc_nick',server):
-				channel = nick
-			
-			# Mark request
-			req[3] = channel
-
-			# Get and print GPG errors/warnings
-			err = p.stderr.read()
-			p.stderr.close()
-			weechat.prnt(buffer, '%s requested key for channel %s (server %s)' % \
-					(nick, channel, server))
-			# We need a test of signature
-			weechat.prnt(buffer, '%s' % err)
-			weechat.prnt(buffer, 'What do you want to do? [accept | decline | cancel]')
-			return weechat.WEECHAT_RC_OK
+			return ircrypt_command_verify(argv[1], argv[2])
+		return ircrypt_command_verify('', '')
 
 	if argv == ['cancel']:
 		# Remove marker from all pending requests
@@ -218,6 +185,64 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 				del ircrypt_pending_requests[i]
 				return weechat.WEECHAT_RC_OK
 
+	# Check if a server was set
+	if (len(argv) > 2 and argv[1] == '-server'):
+		server_name = argv[2]
+		del argv[2]
+		del argv[1]
+	else:
+		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
+		return weechat.WEECHAT_RC_ERROR
+
+	# We need at least one additional argument
+	if len(argv) < 2:
+		return weechat.WEECHAT_RC_ERROR
+
+	target = '%s/%s' % (server_name, argv[1])
+
+	# Ask for a key
+	if argv[0] == 'exchange':
+		if len(argv) == 2:
+			return ircrypt_keyex_askkey(argv[1], None, server_name)
+		if len(argv) == 3:
+			return ircrypt_keyex_askkey(argv[1], argv[2], server_name)
+		return weechat.WEECHAT_RC_ERROR
+
+	# Set keys
+	if argv[0] == 'set':
+		if len(argv) < 3:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_set_keys(target, ' '.join(argv[2:]))
+
+	# Remove keys
+	if argv[0] == 'remove':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_remove_keys(target)
+
+	# Set asymmetric ids
+	if argv[0] == 'set-pub':
+		if len(argv) < 3:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_set_pub(target, ' '.join(argv[2:]))
+
+	# Remove asymmetric ids
+	if argv[0] == 'remove-pub':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_remove_pub(target)
+
+	# Set special cipher for channel
+	if argv[0] == 'set-cip':
+		if len(argv) < 3:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_set_cip(target, ' '.join(argv[2:]))
+
+	# Remove secial cipher for channel
+	if argv[0] == 'remove-cip':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_remove_cip(target)
 
 	return weechat.WEECHAT_RC_OK
 
@@ -865,7 +890,6 @@ def ircrypt_command_set_cip(target, cipher):
 	weechat.prnt(weechat.current_buffer(),'Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
 
-
 def ircrypt_command_remove_cip(target):
 	'''ircrypt command to remove key for target (target is a server/channel combination)'''
 	global ircrypt_cipher
@@ -878,6 +902,55 @@ def ircrypt_command_remove_cip(target):
 	weechat.prnt(buffer, 'Removed special cipher. Use default cipher for %s instead.' % target)
 	return weechat.WEECHAT_RC_OK
 
+def ircrypt_command_verify(server, nick):
+	global ircrypt_pending_requests
+
+	requests = ircrypt_pending_requests
+	buffer = ircrypt_get_buffer()
+
+	# Remove marker from all pending requests
+	for req in filter(lambda x: x[3], requests):
+		req[3] = False
+	
+	# Prefilter requests
+	if (server and nick):
+		requests = filter(lambda x: x[0] == server and x[1] == nick,
+				ircrypt_pending_requests)
+	
+	# Run through prefilterd requests
+	for req in requests:
+		server = req[0]
+		nick   = req[1]
+		# Decrypt and show signature
+		p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet',
+			'-d'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE)
+		p.stdin.write(base64.b64decode(req[2]))
+		p.stdin.close()
+		channel = p.stdout.read()
+		p.stdout.close()
+
+		# if channel is own nick, change channel to the nick of the sender
+		if channel == weechat.info_get('irc_nick',server):
+			channel = nick
+		
+		# Mark request
+		req[3] = channel
+
+		# Get and print GPG errors/warnings
+		err = p.stderr.read()
+		p.stderr.close()
+		weechat.prnt(buffer, '%s requested key for channel %s (server %s)' % \
+				(nick, channel, server))
+		# We need a test of signature
+		weechat.prnt(buffer, '%s' % err)
+		weechat.prnt(buffer, 'What do you want to do? [accept | decline | cancel]')
+		return weechat.WEECHAT_RC_OK
+
+	# No matching request
+	weechat.prnt(buffer, 'No matching request to verify')
+	return weechat.WEECHAT_RC_OK
+
 
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command.'''
@@ -885,8 +958,20 @@ def ircrypt_command(data, buffer, args):
 
 	if args == '' or args == 'list':
 		return ircrypt_command_list()
+	
+	if args == 'buffer':
+		ircrypt_get_buffer()
+		return weechat.WEECHAT_RC_OK
 
 	argv = [a for a in args.split(' ') if a]
+	
+	# verify
+	if argv[0] == 'verify':
+		if len(argv) == 1:
+			return ircrypt_command_verify('', '')
+		if len(argv) == 3:
+			return ircrypt_command_verify(argv[1], argv[2])
+		return weechat.WEECHAT_RC_ERROR
 
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
@@ -910,7 +995,7 @@ def ircrypt_command(data, buffer, args):
 		if len(argv) == 3:
 			return ircrypt_keyex_askkey(argv[1], argv[2], server_name)
 		return weechat.WEECHAT_RC_ERROR
-
+	
 	# Set keys
 	if argv[0] == 'set':
 		if len(argv) < 3:
@@ -1065,6 +1150,8 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 
 	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
 			'[list] '
+			'| [buffer] '
+			'| [verify] [server] [nick]'
 			'| exchange [-server <server>] <nick> [channel] '
 			'| set [-server <server>] <target> <key> '
 			'| remove [-server <server>] <target>'
@@ -1085,9 +1172,10 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'\n   /ircrypt set nick secret+key\n'
 			'Set the public key identifier for a user:'
 			'\n   /ircrypt set nick Id\n',
-			'list || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'list || buffer || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
+			'|| verify %(irc_servers) %(nicks)'
 			'|| set-pub %(nicks)|-server %(irc_servers) %- '
 			'|| remove-pub |%(nicks)|-server %(irc_servers) %-'
 			'|| set-cip %(irc_channel)|-server %(irc_servers) %- '
