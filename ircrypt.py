@@ -154,6 +154,7 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 				if len(argv) == 4:
 					return ircrypt_command_verify_keys(argv[2], argv[3])
 				return ircrypt_command_verify_keys('', '')
+		return weechat.WEECHAT_RC_OK
 
 	if argv == ['cancel']:
 		# Remove marker from all pending requests
@@ -222,7 +223,7 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 				nick    = ircrypt_pending_keys[i][1]
 				channel = ircrypt_pending_keys[i][3][0]
 				server  = ircrypt_pending_keys[i][0]
-				key     = ircrypt_pending_keys[i][3][1:]
+				key     = ' '.join(ircrypt_pending_keys[i][3][1:])
 
 				weechat.prnt(buffer, 'Accepted %s\'s key for channel %s (server %s).' % \
 						(nick, channel, server))
