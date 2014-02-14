@@ -140,10 +140,10 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 	global ircrypt_pending_requests, ircrypt_pending_keys
 
 	argv = input_data.split()
-	
+
 	if argv[0] == 'list':
 		return ircrypt_command_list()
-	
+
 	if argv[0] == 'verify':
 		if len(argv) > 1:
 			if argv[1] == 'requests':
@@ -167,37 +167,37 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 		return weechat.WEECHAT_RC_OK
 
 	if argv == ['decline']:
-		
+
 		# decline pending request
 		for i in range(len(ircrypt_pending_requests)):
 			if ircrypt_pending_requests[i][3]:
-				
+
 				nick    = ircrypt_pending_requests[i][1]
 				channel = ircrypt_pending_requests[i][3]
 				server  = ircrypt_pending_requests[i][0]
-				
+
 				# send decline with servername and channel to nick with >UCRY-
 				weechat.command('','/mute -all notice -server %s %s >UCRY-DECLINE %s %s ' \
 						% (server, nick, server, channel))
-	
+
 				weechat.prnt(buffer, 'Declined %s\'s request for channel %s (server %s).' % \
 						(nick, channel, server))
 				del ircrypt_pending_requests[i]
 				return weechat.WEECHAT_RC_OK
-		
-		# decline pending keys 
+
+		# decline pending keys
 		for i in range(len(ircrypt_pending_keys)):
 			if ircrypt_pending_keys[i][3]:
-				
+
 				nick    = ircrypt_pending_keys[i][1]
 				channel = ircrypt_pending_keys[i][3][0]
 				server  = ircrypt_pending_keys[i][0]
-	
+
 				weechat.prnt(buffer, 'Declined %s\'s key for channel %s (server %s).' % \
 						(nick, channel, server))
 				del ircrypt_pending_keys[i]
 				return weechat.WEECHAT_RC_OK
-		
+
 		# nothing to decline
 		weechat.prnt(buffer, 'Nothing to decline.')
 		return weechat.WEECHAT_RC_OK
@@ -218,7 +218,7 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 
 		for i in range(len(ircrypt_pending_keys)):
 			if ircrypt_pending_keys[i][3]:
-				
+
 				nick    = ircrypt_pending_keys[i][1]
 				channel = ircrypt_pending_keys[i][3][0]
 				server  = ircrypt_pending_keys[i][0]
@@ -433,7 +433,7 @@ def ircrypt_keyex_receive_key(servername, args, info):
 	return ''
 
 def old_ircrypt_keyex_receive_key(servername, args, info):
-	
+
 	global ircrypt_msg_buffer, ircrypt_config_option
 
 	pre, message    = string.split(args, '>2CRY-', 1)
@@ -1031,7 +1031,7 @@ def ircrypt_command_remove_pub(target):
 def ircrypt_command_set_cip(target, cipher):
 	'''ircrypt command to set key for target (target is a server/channel combination)'''
 	global ircrypt_cipher
-	ircrypt_cipher[target] = cipher 
+	ircrypt_cipher[target] = cipher
 	weechat.prnt(weechat.current_buffer(),'Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
 
@@ -1057,16 +1057,16 @@ def ircrypt_command_verify_requests(server, nick):
 	# Remove marker from all pending requests
 	for req in filter(lambda x: x[3], requests):
 		req[3] = False
-	
+
 	# Remove marker from all pending keys
 	for key in filter(lambda x: x[3], keys):
 		key[3] = False
-	
+
 	# Prefilter requests
 	if (server and nick):
 		requests = filter(lambda x: x[0] == server and x[1] == nick,
 				ircrypt_pending_requests)
-	
+
 	# Run through prefilterd requests
 	for req in requests:
 		server = req[0]
@@ -1083,7 +1083,7 @@ def ircrypt_command_verify_requests(server, nick):
 		# if channel is own nick, change channel to the nick of the sender
 		if channel == weechat.info_get('irc_nick',server):
 			channel = nick
-		
+
 		# Mark request
 		req[3] = channel
 
@@ -1111,16 +1111,16 @@ def ircrypt_command_verify_keys(server, nick):
 	# Remove marker from all pending requests
 	for req in filter(lambda x: x[3], requests):
 		req[3] = False
-	
+
 	# Remove marker from all pending keys
 	for key in filter(lambda x: x[3], keys):
 		key[3] = False
-	
+
 	# Prefilter keys
 	if (server and nick):
 		keys = filter(lambda x: x[0] == server and x[1] == nick,
 				ircrypt_pending_keys)
-	
+
 	# Run through prefilterd keys
 	for key in keys:
 		server = key[0]
@@ -1137,7 +1137,7 @@ def ircrypt_command_verify_keys(server, nick):
 		# if channel is own nick, change channel to the nick of the sender
 		if channel == weechat.info_get('irc_nick',server):
 			channel = nick
-		
+
 		# Mark request
 		key[3] = [channel, channel_key]
 
@@ -1161,13 +1161,13 @@ def ircrypt_command(data, buffer, args):
 
 	if args == '' or args == 'list':
 		return ircrypt_command_list()
-	
+
 	if args == 'buffer':
 		ircrypt_get_buffer()
 		return weechat.WEECHAT_RC_OK
 
 	argv = [a for a in args.split(' ') if a]
-	
+
 	# verify
 	if argv[0] == 'verify':
 		if len(argv) == 1:
@@ -1198,7 +1198,7 @@ def ircrypt_command(data, buffer, args):
 		if len(argv) == 3:
 			return ircrypt_keyex_askkey(argv[1], argv[2], server_name)
 		return weechat.WEECHAT_RC_ERROR
-	
+
 	# Set keys
 	if argv[0] == 'set':
 		if len(argv) < 3:
