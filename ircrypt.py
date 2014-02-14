@@ -212,9 +212,8 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 
 				weechat.prnt(buffer, 'Accepted %s\'s request for channel %s (server %s).' % \
 						(nick, channel, server))
-				ircrypt_keyex_sendkey(nick, channel, server)
-				
-				del ircrypt_pending_requests[i]
+				if ircrypt_keyex_sendkey(nick, channel, server) == weechat.WEECHAT_RC_OK:
+					del ircrypt_pending_requests[i]
 				return weechat.WEECHAT_RC_OK
 
 		for i in range(len(ircrypt_pending_keys)):
@@ -530,7 +529,10 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		weechat.prnt('', 'GPG reported error:\n%s' % err)
+		weechat.prnt(ircrypt_get_buffer(), '%s' % err)
+	p.wait()
+	if p.returncode:
+		weechat.prnt(ircrypt_get_buffer(), 'GnuPG reported error. Operation canceled')
 	if not encrypted:
 		return weechat.WEECHAT_RC_ERROR
 
