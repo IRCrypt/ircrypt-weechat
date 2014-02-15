@@ -1170,11 +1170,15 @@ def ircrypt_command(data, buffer, args):
 
 	# verify
 	if argv[0] == 'verify':
-		if len(argv) == 1:
-			return ircrypt_command_verify('', '')
-		if len(argv) == 3:
-			return ircrypt_command_verify(argv[1], argv[2])
-		return weechat.WEECHAT_RC_ERROR
+		if len(argv) > 1:
+			if argv[1] == 'requests':
+				if len(argv) == 4:
+					return ircrypt_command_verify_requests(argv[2], argv[3])
+				return ircrypt_command_verify_requests('', '')
+			if argv[1] == 'keys':
+				if len(argv) == 4:
+					return ircrypt_command_verify_keys(argv[2], argv[3])
+				return ircrypt_command_verify_keys('', '')
 
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
