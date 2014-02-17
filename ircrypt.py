@@ -318,7 +318,14 @@ def ircrypt_get_buffer():
 
 def ircrypt_keyex_askkey(nick, channel, servername):
 
-	global ircrypt_asym_id
+	global ircrypt_asym_id, ircrypt_config_option
+
+	if not weechat.config_boolean(
+			weechat.config_get('ircrypt.cipher.exchange_enabled')):
+		weechat.prnt(weechat.current_buffer(), 'Key exchange not enabled.'
+				'\nUse \'/set ircrypt.cipher.exchange_enabled on\' to enable key exchange.'
+				'\nWARNING! Key exchange did not work without graphical surface!')
+		return weechat.WEECHAT_RC_OK
 
 	# If no server was set, use the active one
 	if not servername:
@@ -429,69 +436,6 @@ def ircrypt_keyex_receive_key(servername, args, info):
 			(servername, info['nick']))
 	weechat.prnt(ircrypt_get_buffer(), 'Type verify keys [-server server] [nick] to'
 			' verify the signature on this key(s).')
-
-	return ''
-
-def old_ircrypt_keyex_receive_key(servername, args, info):
-
-	global ircrypt_msg_buffer, ircrypt_config_option
-
-	pre, message    = string.split(args, '>2CRY-', 1)
-	number, message = string.split(message, ' ', 1 )
-
-	# Get key for the message buffer
-	buf_key = '%s.%s.%s.keyex' % (servername, info['channel'], info['nick'])
-
-	# Decrypt only if we got the last part of the message
-	# otherwise put the message into a global buffer and quit
-	if int(number) != 0:
-		if not buf_key in ircrypt_msg_buffer:
-			ircrypt_msg_buffer[buf_key] = MessageParts()
-		ircrypt_msg_buffer[buf_key].update(int(number), message)
-		return ''
-
-	# Get whole message
-	try:
-		message = message + ircrypt_msg_buffer[buf_key].message
-	except KeyError:
-		pass
-
-	# Decrypt
-	p = subprocess.Popen(['gpg2', '--batch',  '--no-tty', '--quiet', '-d'],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write(base64.b64decode(message))
-	p.stdin.close()
-	decrypted = p.stdout.read()
-	p.stdout.close()
-
-	# Get and print GPG errors/warnings
-	err = p.stderr.read()
-	p.stderr.close()
-	if err:
-		#buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
-		weechat.prnt(ircrypt_get_buffer(), '%s' % err)
-
-	# Remove old messages from buffer
-	try:
-		del ircrypt_msg_buffer[buf_key]
-	except KeyError:
-		pass
-
-	if not decrypted:
-		return ''
-
-	# Parse channel/key
-	channel, key = decrypted.split(' ', 1)
-
-	# if channel is own nick, change channel to the nick of the sender
-	if channel == weechat.info_get('irc_nick',servername):
-		channel = info['nick']
-
-	target = '%s/%s' % (servername, channel)
-	ircrypt_keys[target] = key
-
-	weechat.prnt(ircrypt_get_buffer(), 'Received key for %s from %s/%s' %
-			(channel, servername, info['nick']))
 
 	return ''
 
@@ -842,6 +786,11 @@ def ircrypt_config_init():
 			'boolean', 'If asymmetric encryption is used for message encryption',
 			'', 0, 0,
 			'off', 'off', 0, '', '', '', '', '', '')
+	ircrypt_config_option['exchange_enabled'] = weechat.config_new_option(
+			ircrypt_config_file, ircrypt_config_section['cipher'], 'exchange_enabled',
+			'boolean', 'If key exchange is enabled',
+			'', 0, 0,
+			'on', 'on', 0, '', '', '', '', '', '')
 
 	# keys
 	ircrypt_config_section['keys'] = weechat.config_new_section(
@@ -1274,11 +1223,21 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 		# TODO: Add error handler
 		return args
 
+	# Incomming key request.
 	if '>WCRY-' in args:
-		return ircrypt_keyex_get_request(servername, args, info)
+		# if key exchange enabled get request
+		if weechat.config_boolean(
+				weechat.config_get('ircrypt.cipher.exchange_enabled')):
+			return ircrypt_keyex_get_request(servername, args, info)
+		# if key exchange disabled send error notice
+		weechat.command('','/mute -all notice -server %s %s >UCRY-NOEXCHANGE' \
+					% (servername, info['nick']))
+		return ''
 
 	if '>2CRY-' in args:
-		return ircrypt_keyex_receive_key(servername, args, info)
+		if weechat.config_boolean(
+				weechat.config_get('ircrypt.cipher.exchange_enabled')):
+			return ircrypt_keyex_receive_key(servername, args, info)
 
 	return args
 
