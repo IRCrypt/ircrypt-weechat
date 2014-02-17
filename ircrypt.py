@@ -388,6 +388,15 @@ def ircrypt_keyex_get_request(servername, args, info):
 		return ''
 	else:
 		# We got the last part
+
+		# if key exchange disabled send error notice
+		if not weechat.config_boolean(
+				weechat.config_get('ircrypt.cipher.exchange_enabled')):
+			weechat.command('','/mute -all notice -server %s %s >UCRY-NOEXCHANGE' \
+					% (servername, info['nick']))
+			del ircrypt_request_buffer[buf_key]
+			return ''
+
 		ircrypt_pending_requests.append( [
 			servername,
 			info['nick'],
@@ -424,6 +433,13 @@ def ircrypt_keyex_receive_key(servername, args, info):
 		return ''
 	else:
 		# We got the last part
+
+		# if key exchange disabled ignore key
+		if not weechat.config_boolean(
+				weechat.config_get('ircrypt.cipher.exchange_enabled')):
+			del ircrypt_keys_buffer[buf_key]
+			return ''
+
 		ircrypt_pending_keys.append( [
 			servername,
 			info['nick'],
@@ -1225,19 +1241,10 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 
 	# Incomming key request.
 	if '>WCRY-' in args:
-		# if key exchange enabled get request
-		if weechat.config_boolean(
-				weechat.config_get('ircrypt.cipher.exchange_enabled')):
-			return ircrypt_keyex_get_request(servername, args, info)
-		# if key exchange disabled send error notice
-		weechat.command('','/mute -all notice -server %s %s >UCRY-NOEXCHANGE' \
-					% (servername, info['nick']))
-		return ''
+		return ircrypt_keyex_get_request(servername, args, info)
 
 	if '>2CRY-' in args:
-		if weechat.config_boolean(
-				weechat.config_get('ircrypt.cipher.exchange_enabled')):
-			return ircrypt_keyex_receive_key(servername, args, info)
+		return ircrypt_keyex_receive_key(servername, args, info)
 
 	return args
 
