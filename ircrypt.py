@@ -806,7 +806,7 @@ def ircrypt_config_init():
 			ircrypt_config_file, ircrypt_config_section['cipher'], 'exchange_enabled',
 			'boolean', 'If key exchange is enabled',
 			'', 0, 0,
-			'on', 'on', 0, '', '', '', '', '', '')
+			'off', 'off', 0, '', '', '', '', '', '')
 
 	# keys
 	ircrypt_config_section['keys'] = weechat.config_new_section(
