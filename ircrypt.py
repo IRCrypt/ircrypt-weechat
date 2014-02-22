@@ -396,9 +396,9 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 	if not encrypted:
 		return weechat.WEECHAT_RC_ERROR
 
-	# Send as notice in 300 size blocks
-	for i in range(1 + (len(encrypted) / 300))[::-1]:
-		msg = '>WCRY-%i %s' % (i, encrypted[i*300:(i+1)*300])
+	# Send as notice in MAX_PART_LEN sized blocks
+	for i in range(1 + (len(encrypted) / MAX_PART_LEN))[::-1]:
+		msg = '>WCRY-%i %s' % (i, encrypted[i*MAX_PART_LEN:(i+1)*MAX_PART_LEN])
 		weechat.command('','/mute -all notice -server %s %s %s' % (servername, nick, msg))
 
 	# Print status message in ircrypt buffer
