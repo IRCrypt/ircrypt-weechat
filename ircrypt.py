@@ -357,9 +357,19 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 	# Check if key exchange is enabled in the option
 	if not weechat.config_boolean(
 			weechat.config_get('ircrypt.cipher.exchange_enabled')):
-		weechat.prnt(weechat.current_buffer(), 'Key exchange not enabled.'
-				'\nUse \'/set ircrypt.cipher.exchange_enabled on\' to enable key exchange.'
-				'\nWARNING! Key exchange did not work without graphical surface!')
+		weechat.prnt(weechat.current_buffer(),
+				'\n*** KEY EXCHANGE DISABLED ********************************************'
+				'\n  For the moment, you have to explicitly Enable kex exchange with'
+				'\n  “/set ircrypt.cipher.exchange_enabled on” if you want to use this'
+				'\n  feature.'
+				'\n  Be aware that at the moment, key exchange will not work without a'
+				'\n  graphical window environment as GnuPG version 2.x will launch'
+				'\n  pinentry so that your secret key is kept separate from Weechat at'
+				'\n  any time. In a terminal environment, however, GnuPG would try to'
+				'\n  start the ncurses interface instead which will cause ia conflict'
+				'\n  with the weechat ncurses interface. This may lead to both user'
+				'\n  interfaces becoming unusable.'
+				'\n**********************************************************************')
 		return weechat.WEECHAT_RC_OK
 
 	# If no server was set, use the active one
