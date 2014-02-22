@@ -599,8 +599,7 @@ def decrypt(data, msgtype, servername, args):
 	if '>ACRY-' in args:
 		if not weechat.config_boolean(
 				weechat.config_get('ircrypt.cipher.asym_enabled')):
-			if '>2CRY-0 ' in args:
-				weechat.command('','/notice %s >UCRY-CIPHER-NOT-FOUND' % info['nick'])
+			weechat.command('','/notice %s >UCRY-CIPHER-NOT-FOUND' % info['nick'])
 			return ''
 
 		return decrypt_asym(servername, args, info)
