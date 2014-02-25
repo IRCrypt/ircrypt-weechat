@@ -272,7 +272,7 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 		return weechat.WEECHAT_RC_ERROR
 
 	# Set keys
-	if argv[0] == 'set':
+	if argv[0] == 'set-key':
 		if len(argv) < 3:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_set_keys(target, ' '.join(argv[2:]))
@@ -1298,7 +1298,7 @@ def ircrypt_command(data, buffer, args):
 		return weechat.WEECHAT_RC_ERROR
 
 	# Set keys
-	if argv[0] == 'set':
+	if argv[0] == 'set-key':
 		if len(argv) < 3:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_set_keys(target, ' '.join(argv[2:]))
@@ -1391,7 +1391,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| [buffer] '
 			'| [verify] [server] [nick]'
 			'| exchange [-server <server>] <nick> [channel] '
-			'| set [-server <server>] <target> <key> '
+			'| set-key [-server <server>] <target> <key> '
 			'| remove [-server <server>] <target>'
 			'| set-pub [-server <server>] <nick> <id>'
 			'| remove-pub [-server <server>] <nick>'
@@ -1403,14 +1403,14 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'Target can be a channel or a nick.\n\n'
 			'Examples:\n'
 			'Set the key for a channel:'
-			'\n   /ircrypt set -server freenet #blowfish key\n'
+			'\n   /ircrypt set-key -server freenet #IRCrypt key\n'
 			'Remove the key:'
-			'\n   /ircrypt remove #blowfish\n'
+			'\n   /ircrypt remove-key #IRCrypt\n'
 			'Set the key for a user:'
-			'\n   /ircrypt set nick secret+key\n'
+			'\n   /ircrypt set-key nick key\n'
 			'Set the public key identifier for a user:'
 			'\n   /ircrypt set nick Id\n',
-			'list || buffer || set %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| verify %(irc_servers) %(nicks)'
