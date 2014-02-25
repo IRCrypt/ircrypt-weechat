@@ -1250,7 +1250,7 @@ def ircrypt_command(data, buffer, args):
 		return ircrypt_command_remove_pub(target)
 
 	# Set special cipher for channel
-	if argv[0] == 'set-cip':
+	if argv[0] == 'set-cipher':
 		if len(argv) < 3:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_set_cip(target, ' '.join(argv[2:]))
@@ -1323,12 +1323,11 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| remove [-server <server>] <target>'
 			'| set-gpg-id [-server <server>] <nick> <id>'
 			'| remove-pub [-server <server>] <nick>'
-			'| set-cip [-server <server>] <channel> <cipher>'
+			'| set-cipher [-server <server>] <channel> <cipher>'
 			'| remove-cip [-server <server>] <channel>',
-			'Add, change or remove key for target and \n'
+			'Add, change or remove key for nick or channel.\n'
 			'Add, change or remove public key identifier for nick.\n'
-			'Add, change or remove special cipher for channel.\n'
-			'Target can be a channel or a nick.\n\n'
+			'Add, change or remove special cipher for nick or channel.\n\n'
 			'Examples:\n'
 			'Set the key for a channel:'
 			'\n   /ircrypt set-key -server freenet #IRCrypt key\n'
@@ -1337,14 +1336,16 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'Set the key for a user:'
 			'\n   /ircrypt set-key nick key\n'
 			'Set the public key identifier for a user:'
-			'\n   /ircrypt set-gpg-id nick Id\n',
+			'\n   /ircrypt set-gpg-id nick Id\n'
+			'Switch to a specific cipher in one channel:'
+			'\n   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH',
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| verify %(irc_servers) %(nicks)'
 			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
 			'|| remove-pub |%(nicks)|-server %(irc_servers) %-'
-			'|| set-cip %(irc_channel)|-server %(irc_servers) %- '
+			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
 			'|| remove-cip |%(irc_channel)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
 
