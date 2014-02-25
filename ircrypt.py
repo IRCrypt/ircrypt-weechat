@@ -1238,7 +1238,7 @@ def ircrypt_command(data, buffer, args):
 		return ircrypt_command_remove_keys(target)
 
 	# Set asymmetric ids
-	if argv[0] == 'set-pub':
+	if argv[0] == 'set-gpg-id':
 		if len(argv) < 3:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_set_pub(target, ' '.join(argv[2:]))
@@ -1321,7 +1321,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| exchange [-server <server>] <nick> [channel] '
 			'| set-key [-server <server>] <target> <key> '
 			'| remove [-server <server>] <target>'
-			'| set-pub [-server <server>] <nick> <id>'
+			'| set-gpg-id [-server <server>] <nick> <id>'
 			'| remove-pub [-server <server>] <nick>'
 			'| set-cip [-server <server>] <channel> <cipher>'
 			'| remove-cip [-server <server>] <channel>',
@@ -1337,12 +1337,12 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'Set the key for a user:'
 			'\n   /ircrypt set-key nick key\n'
 			'Set the public key identifier for a user:'
-			'\n   /ircrypt set nick Id\n',
+			'\n   /ircrypt set-gpg-id nick Id\n',
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| verify %(irc_servers) %(nicks)'
-			'|| set-pub %(nicks)|-server %(irc_servers) %- '
+			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
 			'|| remove-pub |%(nicks)|-server %(irc_servers) %-'
 			'|| set-cip %(irc_channel)|-server %(irc_servers) %- '
 			'|| remove-cip |%(irc_channel)|-server %(irc_servers) %-',
