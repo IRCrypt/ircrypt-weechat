@@ -1232,7 +1232,7 @@ def ircrypt_command(data, buffer, args):
 		return ircrypt_command_set_keys(target, ' '.join(argv[2:]))
 
 	# Remove keys
-	if argv[0] == 'remove':
+	if argv[0] == 'remove-key':
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_keys(target)
@@ -1244,7 +1244,7 @@ def ircrypt_command(data, buffer, args):
 		return ircrypt_command_set_pub(target, ' '.join(argv[2:]))
 
 	# Remove asymmetric ids
-	if argv[0] == 'remove-pub':
+	if argv[0] == 'remove-gpg-id':
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_pub(target)
@@ -1256,7 +1256,7 @@ def ircrypt_command(data, buffer, args):
 		return ircrypt_command_set_cip(target, ' '.join(argv[2:]))
 
 	# Remove secial cipher for channel
-	if argv[0] == 'remove-cip':
+	if argv[0] == 'remove-cipher':
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_cip(target)
@@ -1320,11 +1320,11 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| [verify] [server] [nick]'
 			'| exchange [-server <server>] <nick> [channel] '
 			'| set-key [-server <server>] <target> <key> '
-			'| remove [-server <server>] <target>'
+			'| remove-key [-server <server>] <target>'
 			'| set-gpg-id [-server <server>] <nick> <id>'
-			'| remove-pub [-server <server>] <nick>'
+			'| remove-gpg-id [-server <server>] <nick>'
 			'| set-cipher [-server <server>] <channel> <cipher>'
-			'| remove-cip [-server <server>] <channel>',
+			'| remove-cipher [-server <server>] <channel>',
 			'Add, change or remove key for nick or channel.\n'
 			'Add, change or remove public key identifier for nick.\n'
 			'Add, change or remove special cipher for nick or channel.\n\n'
@@ -1336,17 +1336,21 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'Set the key for a user:'
 			'\n   /ircrypt set-key nick key\n'
 			'Set the public key identifier for a user:'
-			'\n   /ircrypt set-gpg-id nick Id\n'
-			'Switch to a specific cipher in one channel:'
-			'\n   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH',
+			'\n   /ircrypt set-gpg-id -server freenode nick Id\n'
+			'Remove public key identifier for a user:'
+			'\n   /ircrypt remove-gpg-id nick\n'
+			'Switch to a specific cipher for a channel:'
+			'\n   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH'
+			'Unset the specific cipher for a channel:'
+			'\n   /ircrypt remove-cipher #IRCrypt',
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-			'|| remove %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| verify %(irc_servers) %(nicks)'
 			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
-			'|| remove-pub |%(nicks)|-server %(irc_servers) %-'
+			'|| remove-gpg-id |%(nicks)|-server %(irc_servers) %-'
 			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
-			'|| remove-cip |%(irc_channel)|-server %(irc_servers) %-',
+			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
 
 	ircrypt_config_init()
