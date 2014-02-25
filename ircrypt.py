@@ -386,7 +386,7 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 
 	# Check if asymetric identifer exists
 	if not key_id:
-		weechat.prnt('', 'There is no ID for this Nick.')
+		weechat.prnt(weechat.current_buffer(), 'There is no ID for this Nick.')
 		return weechat.WEECHAT_RC_OK
 
 	# encrypt and sign channel with gpg2
@@ -551,12 +551,12 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 
 	# Check if key exists
 	if not key:
-		weechat.prnt('', 'There is no key for this channel.')
+		weechat.prnt(weechat.current_buffer(), 'There is no key for this channel.')
 		return weechat.WEECHAT_RC_OK
 
 	# Check if asymetric identifer exists
 	if not key_id:
-		weechat.prnt('', 'There is no ID for this Nick.')
+		weechat.prnt(weechat.current_buffer(), 'There is no GPG ID for this Nick.')
 		return weechat.WEECHAT_RC_OK
 
 	# encrypt and sign channel and key with gpg2
