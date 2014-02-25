@@ -112,6 +112,45 @@ ALWAYS           = 1
 IF_NEW           = 2
 
 
+ircrypt_help_text = '''
+Add, change or remove key for nick or channel.
+Add, change or remove public key identifier for nick.
+Add, change or remove special cipher for nick or channel.
+
+IRCrypt command options:
+
+list                                               List set keys, ids and ciphers
+buffer                                             Switch to/Open IRCrypt buffer
+set-key       [-server <server>] <target> <key>    Set key for target
+remove-key    [-server <server>] <target>          Remove key for target
+set-gpg-id    [-server <server>] <nick> <id>       Set public key identifier for nick
+remove-gpg-id [-server <server>] <nick>            Remove public key identifier for nick
+set-cipher    [-server <server>] <target> <cipher> Set specific cipher for channel
+remove-cipher [-server <server>] <target>          Remove specific cipher for channel
+exchange      [-server <server>] <nick> [<target>] Request key for channel from nick
+verify        requests [<server> <nick>]           Check signature of incomming key requests
+verify        keys     [<server> <nick>]           Check signature of received keys
+ 
+
+Examples:
+
+Set the key for a channel:
+  /ircrypt set-key -server freenet #IRCrypt key
+Remove the key:
+  /ircrypt remove-key #IRCrypt
+Set the key for a user:
+  /ircrypt set-key nick key
+Set the public key identifier for a user:
+  /ircrypt set-gpg-id -server freenode nick Id
+Remove public key identifier for a user:
+  /ircrypt remove-gpg-id nick
+Switch to a specific cipher for a channel:
+  /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
+Unset the specific cipher for a channel:
+  /ircrypt remove-cipher #IRCrypt
+'''
+
+
 class MessageParts:
 	'''Class used for storing parts of messages which were split after
 	encryption due to their length.'''
@@ -1195,7 +1234,7 @@ def ircrypt_command(data, buffer, args):
 
 	# buffer, create ircrypt buffer
 	if args == 'buffer':
-		ircrypt_get_buffer()
+		ircrypt_get_buffer(ALWAYS)
 		return weechat.WEECHAT_RC_OK
 
 	argv = [a for a in args.split(' ') if a]
@@ -1331,33 +1370,16 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 
 	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
 			'[list] '
-			'| [buffer] '
-			'| [verify] [server] [nick]'
-			'| exchange [-server <server>] <nick> [channel] '
+			'| buffer '
 			'| set-key [-server <server>] <target> <key> '
 			'| remove-key [-server <server>] <target>'
 			'| set-gpg-id [-server <server>] <nick> <id>'
 			'| remove-gpg-id [-server <server>] <nick>'
-			'| set-cipher [-server <server>] <channel> <cipher>'
-			'| remove-cipher [-server <server>] <channel>',
-			'Add, change or remove key for nick or channel.\n'
-			'Add, change or remove public key identifier for nick.\n'
-			'Add, change or remove special cipher for nick or channel.\n\n'
-			'Examples:\n'
-			'Set the key for a channel:'
-			'\n   /ircrypt set-key -server freenet #IRCrypt key\n'
-			'Remove the key:'
-			'\n   /ircrypt remove-key #IRCrypt\n'
-			'Set the key for a user:'
-			'\n   /ircrypt set-key nick key\n'
-			'Set the public key identifier for a user:'
-			'\n   /ircrypt set-gpg-id -server freenode nick Id\n'
-			'Remove public key identifier for a user:'
-			'\n   /ircrypt remove-gpg-id nick\n'
-			'Switch to a specific cipher for a channel:'
-			'\n   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH'
-			'Unset the specific cipher for a channel:'
-			'\n   /ircrypt remove-cipher #IRCrypt',
+			'| set-cipher [-server <server>] <target> <cipher>'
+			'| remove-cipher [-server <server>] <target>'
+			'| exchange [-server <server>] <nick> [<target>]'
+			'| verify requests|keys [<server> <nick>]',
+			ircrypt_help_text,
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
