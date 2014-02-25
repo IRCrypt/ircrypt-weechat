@@ -107,6 +107,9 @@ ircrypt_keys_buffer = {}
 # Constants used throughout this script
 MAX_PART_LEN     = 300
 MSG_PART_TIMEOUT = 300 # 5min
+NEVER            = 0
+ALWAYS           = 1
+IF_NEW           = 2
 
 
 class MessageParts:
@@ -230,6 +233,7 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 	return ircrypt_command(data, buffer, args)
 
 
+
 def ircrypt_buffer_close_cb(data, buffer):
 	'''close_callback
 	This function called when ircrypt buffer is closed
@@ -241,19 +245,25 @@ def ircrypt_buffer_close_cb(data, buffer):
 	ircrypt_buffer = None
 	return weechat.WEECHAT_RC_OK
 
-def ircrypt_get_buffer():
-	'''Function to create ircrypt buffer
 
-	return : ircrypt buffer'''
+def ircrypt_get_buffer(goto=NEVER):
+	'''Function to create the IRCrypt buffer if non-existent. If the buffer
+	alredy exists a pointer to the existing buffer is returned.
+
+	:param goto:
+
+	:returns: ircrypt buffer'''
 
 	global ircrypt_buffer
 
 	# if buffer exists, return buffer
 	if ircrypt_buffer:
+		if goto == ALWAYS:
+			weechat.command('','/buffer IRCrypt')
 		return ircrypt_buffer
 
 	# create buffer
-	ircrypt_buffer = weechat.buffer_new('*icrypt', 'ircrypt_buffer_input_cb',
+	ircrypt_buffer = weechat.buffer_new('IRCrypt', 'ircrypt_buffer_input_cb',
 			'', 'ircrypt_buffer_close_cb', '')
 
 	# set title
@@ -262,7 +272,11 @@ def ircrypt_get_buffer():
 	# disable logging, by setting local variable "no_log" to "1"
 	weechat.buffer_set(ircrypt_buffer, 'localvar_set_no_log', '1')
 
+	if goto != NEVER:
+		weechat.command('','/buffer IRCrypt')
+
 	return ircrypt_buffer
+
 
 def ircrypt_keyex_askkey(nick, channel, servername):
 	'''Part of key exchange
@@ -333,7 +347,8 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 		weechat.command('','/mute -all notice -server %s %s %s' % (servername, nick, msg))
 
 	# Print status message in ircrypt buffer
-	weechat.prnt(ircrypt_get_buffer(), 'Ask %s for key of channel %s/%s. Waiting for answer...' % \
+	weechat.prnt(ircrypt_get_buffer(IF_NEW),
+			'Ask %s for key of channel %s/%s. Waiting for answer...' % \
 			(nick, servername, channel))
 
 	return weechat.WEECHAT_RC_OK
@@ -1060,7 +1075,7 @@ def ircrypt_command_verify_requests(server, nick):
 	# Get pending requests, pending keys and ircrypt buffer
 	requests = ircrypt_pending_requests
 	keys = ircrypt_pending_keys
-	buffer = ircrypt_get_buffer()
+	buffer = ircrypt_get_buffer(ALWAYS)
 
 	# Remove marker from all pending requests
 	for req in filter(lambda x: x[3], requests):
@@ -1119,7 +1134,7 @@ def ircrypt_command_verify_keys(server, nick):
 	# Get pending requests, pending keys and the ircrypt buffer
 	requests = ircrypt_pending_requests
 	keys = ircrypt_pending_keys
-	buffer = ircrypt_get_buffer()
+	buffer = ircrypt_get_buffer(ALWAYS)
 
 	# Remove marker from all pending requests
 	for req in filter(lambda x: x[3], requests):
@@ -1346,7 +1361,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
-			'|| verify %(irc_servers) %(nicks)'
+			'|| verify requests|keys %(irc_servers) %(nicks)'
 			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
 			'|| remove-gpg-id |%(nicks)|-server %(irc_servers) %-'
 			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
