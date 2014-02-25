@@ -119,17 +119,17 @@ Add, change or remove special cipher for nick or channel.
 
 IRCrypt command options:
 
-list                                               List set keys, ids and ciphers
-buffer                                             Switch to/Open IRCrypt buffer
-set-key       [-server <server>] <target> <key>    Set key for target
-remove-key    [-server <server>] <target>          Remove key for target
-set-gpg-id    [-server <server>] <nick> <id>       Set public key identifier for nick
-remove-gpg-id [-server <server>] <nick>            Remove public key identifier for nick
-set-cipher    [-server <server>] <target> <cipher> Set specific cipher for channel
-remove-cipher [-server <server>] <target>          Remove specific cipher for channel
-exchange      [-server <server>] <nick> [<target>] Request key for channel from nick
-verify        requests [<server> <nick>]           Check signature of incomming key requests
-verify        keys     [<server> <nick>]           Check signature of received keys
+list                                                 List set keys, ids and ciphers
+buffer                                               Switch to/Open IRCrypt buffer
+set-key         [-server <server>] <target> <key>    Set key for target
+remove-key      [-server <server>] <target>          Remove key for target
+set-gpg-id      [-server <server>] <nick> <id>       Set public key identifier for nick
+remove-gpg-id   [-server <server>] <nick>            Remove public key identifier for nick
+set-cipher      [-server <server>] <target> <cipher> Set specific cipher for channel
+remove-cipher   [-server <server>] <target>          Remove specific cipher for channel
+exchange        [-server <server>] <nick> [<target>] Request key for channel from nick
+verify-requests [-server <server>] [<nick>]          Check signature of incomming key requests
+verify-keys     [-server <server>] [<nick>]          Check signature of received keys
  
 
 Examples:
@@ -238,6 +238,7 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 		weechat.prnt(buffer, 'Nothing to decline.')
 		return weechat.WEECHAT_RC_OK
 
+	weechat.prnt('', '%s' % argv)
 	# Command accept
 	if argv == ['accept']:
 		# Accept pending request
@@ -443,8 +444,10 @@ def ircrypt_keyex_get_request(servername, args, info):
 	# Print status message in ircrypt buffer
 	weechat.prnt(ircrypt_get_buffer(), 'Received key request from nick %s/%s' %
 			(servername, info['nick']))
-	weechat.prnt(ircrypt_get_buffer(), 'Type verify requests [-server server] [nick] to'
-			' verify the signature on this request(s).')
+	weechat.prnt(ircrypt_get_buffer(), 
+			u'  Type %sverify-requests [-server server] [nick]%s '
+			'to verify the signature of this request(s).' % 
+			(weechat.color('bold'), weechat.color('-bold')))
 	# Return empty message
 	return ''
 
@@ -496,8 +499,10 @@ def ircrypt_keyex_receive_key(servername, args, info):
 	# Print status message in ircrypt buffer
 	weechat.prnt(ircrypt_get_buffer(), 'Received key from nick %s/%s' %
 			(servername, info['nick']))
-	weechat.prnt(ircrypt_get_buffer(), 'Type verify keys [-server server] [nick] to'
-			' verify the signature on this key(s).')
+	weechat.prnt(ircrypt_get_buffer(),
+			u'  Type %sverify-keys [-server server] [nick]%s '
+			'to verify the signature of this keys(s).' % 
+			(weechat.color('bold'), weechat.color('-bold')))
 	# return empty message
 	return ''
 
@@ -526,12 +531,14 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 
 	# Check if key exists
 	if not key:
-		weechat.prnt(weechat.current_buffer(), 'There is no key for this channel.')
+		weechat.prnt(weechat.current_buffer(), '  Key cannot be sent '
+				'as there is no key set for the requested channel.')
 		return weechat.WEECHAT_RC_OK
 
 	# Check if asymetric identifer exists
 	if not key_id:
-		weechat.prnt(weechat.current_buffer(), 'There is no GPG ID for this Nick.')
+		weechat.prnt(weechat.current_buffer(), '  Key cannot be sent '
+				'as there is no public key identifier set for the requester.')
 		return weechat.WEECHAT_RC_OK
 
 	# encrypt and sign channel and key with gpg2
@@ -560,7 +567,7 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 		weechat.command('','/mute -all notice -server %s %s %s' % (servername, nick, msg))
 
 	# Print status message in ircrypt buffer
-	weechat.prnt(ircrypt_get_buffer(), 'Sent key for %s to %s/%s' % \
+	weechat.prnt(ircrypt_get_buffer(), '  Sent key for %s to %s/%s' % \
 			(channel, servername, nick))
 
 	return weechat.WEECHAT_RC_OK
@@ -1124,10 +1131,13 @@ def ircrypt_command_verify_requests(server, nick):
 	for key in filter(lambda x: x[3], keys):
 		key[3] = False
 
-	# Prefilter requests
-	if (server and nick):
-		requests = filter(lambda x: x[0] == server and x[1] == nick,
-				ircrypt_pending_requests)
+	# Filter requests by server
+	if server:
+		requests = filter(lambda x: x[0] == server, requests)
+
+	# Filter requests by nick
+	if nick:
+		requests = filter(lambda x: x[1] == nick, requests)
 
 	# Run through prefilterd requests
 	for req in requests:
@@ -1152,11 +1162,14 @@ def ircrypt_command_verify_requests(server, nick):
 		# Get and print GPG errors/warnings
 		err = p.stderr.read()
 		p.stderr.close()
-		weechat.prnt(buffer, '%s requested key for channel %s (server %s)' % \
-				(nick, channel, server))
+		weechat.prnt(buffer, '%s requested key for channel %s/%s' % \
+				(nick, server, channel))
 		# We need a test of signature
-		weechat.prnt(buffer, '%s' % err)
-		weechat.prnt(buffer, 'What do you want to do? [accept | decline | cancel]')
+		err = '\n'.join(['  ' + line for line in err.split('\n') if line])
+		weechat.prnt(buffer, err)
+		weechat.prnt(buffer, '  What do you want to do? '
+				'%s[ accept | decline | cancel ]%s' %
+				(weechat.color('bold'), weechat.color('-bold')))
 		return weechat.WEECHAT_RC_OK
 
 	# No matching request
@@ -1183,10 +1196,13 @@ def ircrypt_command_verify_keys(server, nick):
 	for key in filter(lambda x: x[3], keys):
 		key[3] = False
 
-	# Prefilter keys
-	if (server and nick):
-		keys = filter(lambda x: x[0] == server and x[1] == nick,
-				ircrypt_pending_keys)
+	# Filter keys by server
+	if server:
+		keys = filter(lambda x: x[0] == server, keys)
+
+	# Filter keys by nick
+	if nick:
+		keys = filter(lambda x: x[1] == nick, keys)
 
 	# Run through prefilterd keys
 	for key in keys:
@@ -1214,8 +1230,11 @@ def ircrypt_command_verify_keys(server, nick):
 		weechat.prnt(buffer, '%s send you the key for channel %s (server %s)' % \
 				(nick, channel, server))
 		# We need a test of signature
-		weechat.prnt(buffer, '%s' % err)
-		weechat.prnt(buffer, 'What do you want to do? [accept | decline | cancel]')
+		err = '\n'.join(['  ' + line for line in err.split('\n') if line])
+		weechat.prnt(buffer, err)
+		weechat.prnt(buffer, '  What do you want to do? '
+				'%s[ accept | decline | cancel ]%s' %
+				(weechat.color('bold'), weechat.color('-bold')))
 		return weechat.WEECHAT_RC_OK
 
 	# No matching keys
@@ -1239,18 +1258,6 @@ def ircrypt_command(data, buffer, args):
 
 	argv = [a for a in args.split(' ') if a]
 
-	# verify
-	if argv[0] == 'verify':
-		if len(argv) > 1:
-			if argv[1] == 'requests':
-				if len(argv) == 4:
-					return ircrypt_command_verify_requests(argv[2], argv[3])
-				return ircrypt_command_verify_requests('', '')
-			if argv[1] == 'keys':
-				if len(argv) == 4:
-					return ircrypt_command_verify_keys(argv[2], argv[3])
-				return ircrypt_command_verify_keys('', '')
-
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
 		server_name = argv[2]
@@ -1260,12 +1267,28 @@ def ircrypt_command(data, buffer, args):
 	else:
 		# Try to determine the server automatically
 		server_name = weechat.buffer_get_string(buffer, 'localvar_server')
-		if not server_name:
-			# if no server was set print message in ircrypt buffer and throw error
-			weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
-			return weechat.WEECHAT_RC_ERROR
 
-	# We need at least one additional argument
+	# Verify (check signature) of pending requests requests for key exchange
+	if argv[0] == 'verify-requests':
+		if len(argv) > 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_verify_requests(server_name,
+				argv[1] if len(argv) == 2 else '')
+
+	# Verify (check signature) of sent keys
+	if argv[0] == 'verify-keys':
+		if len(argv) > 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_verify_keys(server_name,
+				argv[1] if len(argv) == 2 else '')
+
+	# All remaining commands need a server name
+	if not server_name:
+		# if no server was set print message in ircrypt buffer and throw error
+		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
+		return weechat.WEECHAT_RC_ERROR
+
+	# For the remaining commands we need at least one additional argument
 	if len(argv) < 2:
 		return weechat.WEECHAT_RC_ERROR
 
@@ -1372,20 +1395,22 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'[list] '
 			'| buffer '
 			'| set-key [-server <server>] <target> <key> '
-			'| remove-key [-server <server>] <target>'
-			'| set-gpg-id [-server <server>] <nick> <id>'
-			'| remove-gpg-id [-server <server>] <nick>'
-			'| set-cipher [-server <server>] <target> <cipher>'
-			'| remove-cipher [-server <server>] <target>'
-			'| exchange [-server <server>] <nick> [<target>]'
-			'| verify requests|keys [<server> <nick>]',
+			'| remove-key [-server <server>] <target> '
+			'| set-gpg-id [-server <server>] <nick> <id> '
+			'| remove-gpg-id [-server <server>] <nick> '
+			'| set-cipher [-server <server>] <target> <cipher> '
+			'| remove-cipher [-server <server>] <target> '
+			'| exchange [-server <server>] <nick> [<target>] '
+			'| verify-requests [-server <server>] [<nick>] '
+			'| verify-keys [-server <server>] [<nick>]',
 			ircrypt_help_text,
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
-			'|| verify requests|keys %(irc_servers) %(nicks)'
+			'|| verify-requests %(nicks)|-server %(irc_servers) %- '
+			'|| verify-keys %(nicks)|-server %(irc_servers) %- '
 			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
-			'|| remove-gpg-id |%(nicks)|-server %(irc_servers) %-'
+			'|| remove-gpg-id %(nicks)|-server %(irc_servers) %-'
 			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
 			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
