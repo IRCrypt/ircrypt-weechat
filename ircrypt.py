@@ -134,38 +134,19 @@ class MessageParts:
 		self.modified = time.time()
 
 
-def ircrypt_buffer_input_cb(data, buffer, input_data):
+def ircrypt_buffer_input_cb(data, buffer, args):
 	'''input_callback
 	This function called when input text is entered on ircrypt buffer
 
 	:param data:
 	:param buffer: The Irypt buffer
-	:param input_data: the input test entered on ircrypt buffer
+	:param args: the input test entered on ircrypt buffer
 	'''
 
 	global ircrypt_pending_requests, ircrypt_pending_keys
 
 	# Split incomming text
-	argv = input_data.split()
-
-	# Command list
-	if argv[0] == 'list':
-		return ircrypt_command_list()
-
-	# Command verify requests and verify keys with and without parameters
-	if argv[0] == 'verify':
-		if len(argv) > 1:
-			if argv[1] == 'requests':
-				if len(argv) == 4:
-					return ircrypt_command_verify_requests(argv[2], argv[3])
-				return ircrypt_command_verify_requests('', '')
-			if argv[1] == 'keys':
-				if len(argv) == 4:
-					return ircrypt_command_verify_keys(argv[2], argv[3])
-				return ircrypt_command_verify_keys('', '')
-
-		# if no verify command fits return OK and do nothing
-		return weechat.WEECHAT_RC_OK
+	argv = args.split()
 
 	# Command cancel
 	if argv == ['cancel']:
@@ -246,68 +227,8 @@ def ircrypt_buffer_input_cb(data, buffer, input_data):
 				del ircrypt_pending_keys[i]
 				return weechat.WEECHAT_RC_OK
 
-	# Check if a server was set, because all other commands need a server
-	if (len(argv) > 2 and argv[1] == '-server'):
-		server_name = argv[2]
-		del argv[2]
-		del argv[1]
-	else:
-		# if no server was set print message in ircrypt buffer and throw error
-		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
-		return weechat.WEECHAT_RC_ERROR
+	return ircrypt_command(data, buffer, args)
 
-	# Check if there are at least one additional argument
-	if len(argv) < 2:
-		return weechat.WEECHAT_RC_ERROR
-
-	# Set target as server/channel or server/nick combination
-	target = '%s/%s' % (server_name, argv[1])
-
-	# Ask for a key
-	if argv[0] == 'exchange':
-		if len(argv) == 2:
-			return ircrypt_keyex_askkey(argv[1], None, server_name)
-		if len(argv) == 3:
-			return ircrypt_keyex_askkey(argv[1], argv[2], server_name)
-		return weechat.WEECHAT_RC_ERROR
-
-	# Set keys
-	if argv[0] == 'set-key':
-		if len(argv) < 3:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_set_keys(target, ' '.join(argv[2:]))
-
-	# Remove keys
-	if argv[0] == 'remove':
-		if len(argv) != 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_remove_keys(target)
-
-	# Set asymmetric ids
-	if argv[0] == 'set-pub':
-		if len(argv) < 3:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_set_pub(target, ' '.join(argv[2:]))
-
-	# Remove asymmetric ids
-	if argv[0] == 'remove-pub':
-		if len(argv) != 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_remove_pub(target)
-
-	# Set special cipher for channel
-	if argv[0] == 'set-cip':
-		if len(argv) < 3:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_set_cip(target, ' '.join(argv[2:]))
-
-	# Remove secial cipher for channel
-	if argv[0] == 'remove-cip':
-		if len(argv) != 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_remove_cip(target)
-
-	return weechat.WEECHAT_RC_OK
 
 def ircrypt_buffer_close_cb(data, buffer):
 	'''close_callback
@@ -1248,7 +1169,9 @@ def ircrypt_command_verify_keys(server, nick):
 
 
 def ircrypt_command(data, buffer, args):
-	'''Hook to handle the /ircrypt weechat command.'''
+	'''Hook to handle the /ircrypt weechat command. This method is also used for
+	all commands typed into the IRCrypt buffer.
+	'''
 	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
 
 	# list
@@ -1281,7 +1204,12 @@ def ircrypt_command(data, buffer, args):
 		del argv[1]
 		args = args.split(' ', 2)[-1]
 	else:
+		# Try to determine the server automatically
 		server_name = weechat.buffer_get_string(buffer, 'localvar_server')
+		if not server_name:
+			# if no server was set print message in ircrypt buffer and throw error
+			weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
+			return weechat.WEECHAT_RC_ERROR
 
 	# We need at least one additional argument
 	if len(argv) < 2:
