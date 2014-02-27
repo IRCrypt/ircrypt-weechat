@@ -251,7 +251,6 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 		weechat.prnt(buffer, 'Nothing to decline.')
 		return weechat.WEECHAT_RC_OK
 
-	weechat.prnt('', '%s' % argv)
 	# Command accept
 	if argv == ['accept']:
 		# Accept pending request
@@ -1264,16 +1263,23 @@ def ircrypt_command(data, buffer, args):
 	'''
 	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
 
+	argv = [a for a in args.split(' ') if a]
+
+	if argv and not argv[0] in ['list', 'buffer', 'set-key', 'remove-key',
+			'set-gpg-id', 'remove-gpg-id', 'set-cipher', 'remove-cipher',
+			'exchange', 'verify-requests', 'verify-keys']:
+		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
+				weechat.prefix('error'))
+		return weechat.WEECHAT_RC_OK
+
 	# list
-	if args == '' or args == 'list':
+	if not argv or argv == ['list']:
 		return ircrypt_command_list()
 
 	# buffer, create ircrypt buffer
-	if args == 'buffer':
+	if argv == ['buffer']:
 		ircrypt_get_buffer(ALWAYS)
 		return weechat.WEECHAT_RC_OK
-
-	argv = [a for a in args.split(' ') if a]
 
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
