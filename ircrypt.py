@@ -117,7 +117,7 @@ Add, change or remove key for nick or channel.
 Add, change or remove public key identifier for nick.
 Add, change or remove special cipher for nick or channel.
 
-IRCrypt command options:
+%(bold)sIRCrypt command options: %(normal)s
 
 list                                                 List set keys, ids and ciphers
 buffer                                               Switch to/Open IRCrypt buffer
@@ -132,7 +132,7 @@ verify-requests [-server <server>] [<nick>]          Check signature of incommin
 verify-keys     [-server <server>] [<nick>]          Check signature of received keys
  
 
-Examples:
+%(bold)sExamples: %(normal)s
 
 Set the key for a channel:
   /ircrypt set-key -server freenet #IRCrypt key
@@ -148,7 +148,44 @@ Switch to a specific cipher for a channel:
   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
 Unset the specific cipher for a channel:
   /ircrypt remove-cipher #IRCrypt
-'''
+
+
+%(bold)sConfiguration: %(normal)s
+
+Tip: You can list all options and what they are currently set to by executing:
+   /set ircrypt.*
+
+%(bold)sircrypt.marker.encrypted %(normal)s
+   This option will set a string which is displayed in encrypted channels,
+   indicating that the current channel is encrypted. If “{{cipher}}” is used as
+   part of this string, it will be replaced by the cipher currently used by
+   oneself for that particular channel.
+%(bold)sircrypt.marker.unencrypted %(normal)s
+   This option will set a string which is displayed before each message that is
+   send unencrypted in a channel for which a key is set. So you know when
+   someone is talking to you without encryption.
+%(bold)sircrypt.cipher.asym_enabled %(normal)s
+   This enables asymmetric encryption which can be used for encrypted
+   communication without key exchange. It is only required that the public key
+   identifier of the communication partner is set.
+%(bold)sircrypt.cipher.exchange_enabled %(normal)s
+   This option enables key exchange based on GPG and its public key
+   infrastructure. During a key exchange the identity of both communication
+   partners can be verified and finally, a key can be exchanged on a secure
+   way.
+%(bold)sircrypt.cipher.sym_cipher %(normal)s
+   This will set the default cipher used for symmetric encryption. You can get
+   a list of available ciphers by running “gpg --version”.
+
+Additional to these direct configuration options you can add 'ircrypt' to
+weechat.bar.status.items to have an indication that the message you are going
+to send is encrypted. The message displayed id the one set with the
+configuration option ircrypt.marker.encrypted.
+
+It is woth noting that you probably don't want to replace the whole value of
+that option but extend it instead in a way like:
+   /set weechat.bar.status.items {{currentContent}},ircrypt
+''' % {'bold':weechat.color('bold'), 'normal':weechat.color('-bold')}
 
 
 class MessageParts:
