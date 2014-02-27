@@ -424,6 +424,10 @@ def ircrypt_keyex_get_request(servername, args, info):
 	else:
 		# We got the last part
 
+		# Something is not right. A request should never fit in a single message
+		if not buf_key in ircrypt_request_buffer.keys():
+			return args
+
 		# if key exchange disabled send error notice
 		if not weechat.config_boolean(
 				weechat.config_get('ircrypt.cipher.exchange_enabled')):
