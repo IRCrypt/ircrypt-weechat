@@ -191,11 +191,11 @@ class MessageParts:
 
 def ircrypt_buffer_input_cb(data, buffer, args):
 	'''input_callback
-	This function called when input text is entered on ircrypt buffer
+	This function is called when input text is entered on ircrypt buffer
 
 	:param data:
 	:param buffer: The Irypt buffer
-	:param args: the input test entered on ircrypt buffer
+	:param args: the input text
 	'''
 
 	global ircrypt_pending_requests, ircrypt_pending_keys
@@ -298,7 +298,7 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 
 def ircrypt_buffer_close_cb(data, buffer):
 	'''close_callback
-	This function called when ircrypt buffer is closed
+	This function is called when ircrypt buffer is closed
 
 	:param data:
 	:param buffer: The Irypt buffer
@@ -317,7 +317,7 @@ def ircrypt_buffer_close_cb(data, buffer):
 
 def ircrypt_get_buffer(goto=NEVER):
 	'''Function to create the IRCrypt buffer if non-existent. If the buffer
-	alredy exists a pointer to the existing buffer is returned.
+	already exists a pointer to the existing buffer is returned.
 
 	:param goto:
 
@@ -377,7 +377,7 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 	'''Part of key exchange
 	This function is called when user starts key exchange
 
-	:param nick: nick of which you want to have the key
+	:param nick: nick from which you want to have the key
 	:param channel: channel for which the key is
 	:param servername: name of the server
 	'''
@@ -455,7 +455,7 @@ def ircrypt_keyex_get_request(servername, args, info):
 
 	:param servername: name of the server
 	:param args:
-	:param info:
+	:param info: dictionary created by info_get_hashtable
 	'''
 	global ircrypt_request_buffer, ircrypt_pending_requests
 
@@ -516,7 +516,7 @@ def ircrypt_keyex_receive_key(servername, args, info):
 
 	:param servername: name of the server
 	:param args:
-	:param info:
+	:param info: dictionary created by info_get_hashtable
 	'''
 	global ircrypt_keys_buffer, ircrypt_pending_keys
 
@@ -571,7 +571,7 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 	'''Part of key exchange
 	This function is called when user accepts key requests and sends the key back
 
-	:param nick: nick of which you want to have the key
+	:param nick: nick from which you want to have the key
 	:param channel: channel for which the key is
 	:param servername: name of the server
 	'''
@@ -636,7 +636,7 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 def decrypt(data, msgtype, servername, args):
 	'''Hook for incomming PRVMSG commands.
 	This method will parse the input, check if it is an encrypted message and if
-	it is, decrypt it.
+	it is, call the functions decrypt_sym or decrypt_asym to decrypt it.
 
 	:param data:
 	:param msgtype:
@@ -678,14 +678,13 @@ def decrypt(data, msgtype, servername, args):
 
 
 def decrypt_sym(servername, args, info, key):
-	'''Hook for incomming PRVMSG commands.
-	This method will parse the input, check if it is an encrypted message and if
-	it is, decrypt it.
+	'''This method is called to decrypt an symmetric encrypted messages and put
+	them together again if necessary.
 
-	:param data:
-	:param msgtype:
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
+	:param info: dictionary created by info_get_hashtable
+	:param key: key for decryption
 	'''
 	global ircrypt_msg_buffer, ircrypt_config_option
 
@@ -735,14 +734,12 @@ def decrypt_sym(servername, args, info, key):
 
 
 def decrypt_asym(servername, args, info):
-	'''Hook for incomming PRVMSG commands.
-	This method will parse the input, check if it is an encrypted message and if
-	it is, decrypt it.
+	'''This method is called to decrypt an asymmetric encrypted messages and put
+	them together again if necessary.
 
-	:param data:
-	:param msgtype:
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
+	:param info: dictionary created by info_get_hashtable
 	'''
 	global ircrypt_msg_buffer, ircrypt_config_option
 
@@ -793,8 +790,8 @@ def decrypt_asym(servername, args, info):
 
 def encrypt(data, msgtype, servername, args):
 	'''Hook for outgoing PRVMSG commands.
-	This method will encrypt outgoing messages and if necessary (if they grow to
-	large) split them into multiple parts.
+	This method will call the functions encrypt_sym and encrypt_asym to encrypt
+	outgoing messages symmetric or asymmetric
 
 	:param data:
 	:param msgtype:
@@ -820,14 +817,13 @@ def encrypt(data, msgtype, servername, args):
 
 
 def encrypt_sym(servername, args, info, key):
-	'''Hook for outgoing PRVMSG commands.
-	This method will encrypt outgoing messages and if necessary (if they grow to
-	large) split them into multiple parts.
+	'''This method will symmetric encrypt messages and if necessary (if
+	they grow to large) split them into multiple parts.
 
-	:param data:
-	:param msgtype:
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
+	:param info: dictionary created by info_get_hashtable
+	:param key: key for decryption
 	'''
 
 	global ircrypt_cipher
@@ -869,14 +865,13 @@ def encrypt_sym(servername, args, info, key):
 
 
 def encrypt_asym(servername, args, info, key_id):
-	'''Hook for outgoing PRVMSG commands.
-	This method will encrypt outgoing messages and if necessary (if they grow to
-	large) split them into multiple parts.
+	'''This method will asymmetric encrypt messages and if necessary (if
+	they grow to large) split them into multiple parts.
 
-	:param data:
-	:param msgtype:
 	:param servername: IRC server the message comes from.
 	:param args: IRC command line-
+	:param info: dictionary created by info_get_hashtable
+	:param key_id : key_id
 	'''
 
 	# Get prefix and message
