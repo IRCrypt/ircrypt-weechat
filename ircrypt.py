@@ -293,8 +293,15 @@ def ircrypt_buffer_close_cb(data, buffer):
 	:param data:
 	:param buffer: The Irypt buffer
 	'''
-	global ircrypt_buffer
+	global ircrypt_buffer, ircrypt_pending_requests, ircrypt_pending_keys
 	ircrypt_buffer = None
+
+	# Remove marker from all pending requests
+	for req in filter(lambda x: x[3], ircrypt_pending_requests):
+		req[3] = False
+	# Remove marker from all pending keys
+	for key in filter(lambda x: x[3], ircrypt_pending_keys):
+		key[3] = False
 	return weechat.WEECHAT_RC_OK
 
 
@@ -306,7 +313,7 @@ def ircrypt_get_buffer(goto=NEVER):
 
 	:returns: ircrypt buffer'''
 
-	global ircrypt_buffer
+	global ircrypt_buffer, ircrypt_pending_keys, ircrypt_pending_requests
 
 	# if buffer exists, return buffer
 	if ircrypt_buffer:
@@ -323,6 +330,32 @@ def ircrypt_get_buffer(goto=NEVER):
 
 	# disable logging, by setting local variable "no_log" to "1"
 	weechat.buffer_set(ircrypt_buffer, 'localvar_set_no_log', '1')
+
+	# show open key requests
+	for req in ircrypt_pending_requests:
+		nick    = req[1]
+		server  = req[0]
+		weechat.prnt(ircrypt_buffer, 'Received key request from nick %s/%s' %
+				(server, nick))
+	# Show how to verify requests
+	if ircrypt_pending_requests:
+		weechat.prnt(ircrypt_get_buffer(),
+				u'  Type %sverify-requests [-server server] [nick]%s '
+				'to verify the signature of this request(s).' %
+				(weechat.color('bold'), weechat.color('-bold')))
+
+	# show open incomming keys
+	for key in ircrypt_pending_keys:
+		nick    = key[1]
+		server  = key[0]
+		weechat.prnt(ircrypt_buffer, 'Received key from nick %s/%s' %
+				(server, nick))
+	# show how to verify keys
+	if ircrypt_pending_keys:
+		weechat.prnt(ircrypt_get_buffer(),
+				u'  Type %sverify-keys [-server server] [nick]%s '
+				'to verify the signature of this keys(s).' %
+				(weechat.color('bold'), weechat.color('-bold')))
 
 	if goto != NEVER:
 		weechat.command('','/buffer IRCrypt')
@@ -460,9 +493,9 @@ def ircrypt_keyex_get_request(servername, args, info):
 	# Print status message in ircrypt buffer
 	weechat.prnt(ircrypt_get_buffer(), 'Received key request from nick %s/%s' %
 			(servername, info['nick']))
-	weechat.prnt(ircrypt_get_buffer(), 
+	weechat.prnt(ircrypt_get_buffer(),
 			u'  Type %sverify-requests [-server server] [nick]%s '
-			'to verify the signature of this request(s).' % 
+			'to verify the signature of this request(s).' %
 			(weechat.color('bold'), weechat.color('-bold')))
 	# Return empty message
 	return ''
@@ -515,6 +548,7 @@ def ircrypt_keyex_receive_key(servername, args, info):
 	# Print status message in ircrypt buffer
 	weechat.prnt(ircrypt_get_buffer(), 'Received key from nick %s/%s' %
 			(servername, info['nick']))
+
 	weechat.prnt(ircrypt_get_buffer(),
 			u'  Type %sverify-keys [-server server] [nick]%s '
 			'to verify the signature of this keys(s).' % 
