@@ -205,11 +205,18 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 
 	# Command cancel
 	if argv == ['cancel']:
-		# Remove marker from all pending requests
-		for req in filter(lambda x: x[3], ircrypt_pending_requests):
+		# Filter pending requests and keys
+		filtered_requests = filter(lambda x: x[3], ircrypt_pending_requests)
+		filtered_keys = filter(lambda x: x[3], ircrypt_pending_keys)
+
+		if not (filtered_requests or filtered_keys):
+			weechat.prnt(buffer, 'Nothing to cancel')
+			return weechat.WEECHAT_RC_OK
+
+		# Remove marker from all pending requests and keys
+		for req in filtered_requests:
 			req[3] = False
-		# Remove marker from all pending keys
-		for key in filter(lambda x: x[3], ircrypt_pending_keys):
+		for key in filtered_keys:
 			key[3] = False
 		weechat.prnt(buffer, 'Canceled.')
 		return weechat.WEECHAT_RC_OK
@@ -281,6 +288,9 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 				ircrypt_keys['%s/%s' % (server, channel)] = key
 				del ircrypt_pending_keys[i]
 				return weechat.WEECHAT_RC_OK
+		# Nothing to accept
+		weechat.prnt(buffer, 'Nothing to accept.')
+		return weechat.WEECHAT_RC_OK
 
 	return ircrypt_command(data, buffer, args)
 
