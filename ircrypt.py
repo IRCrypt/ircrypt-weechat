@@ -634,10 +634,10 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 	return weechat.WEECHAT_RC_OK
 
 
-def decrypt(data, msgtype, servername, args):
+def ircrypt_decrypt_hook(data, msgtype, servername, args):
 	'''Hook for incomming PRVMSG commands.
-	This method will parse the input, check if it is an encrypted message and if
-	it is, call the functions decrypt_sym or decrypt_asym to decrypt it.
+	This method will parse the input, check if it is an encrypted message and
+	call the appropriate decryption methods if necessary.
 
 	:param data:
 	:param msgtype:
@@ -655,7 +655,7 @@ def decrypt(data, msgtype, servername, args):
 			weechat.command('','/notice %s >UCRY-NOASYM' % info['nick'])
 			return ''
 
-		return decrypt_asym(servername, args, info)
+		return ircrypt_decrypt_asym(servername, args, info)
 
 	# Check if channel is own nick and if change channel to nick of sender
 	if info['channel'][0] not in '#&':
@@ -666,7 +666,7 @@ def decrypt(data, msgtype, servername, args):
 	if key:
 		# if key exists and >CRY part of message start symmetric encryption
 		if '>CRY-' in args:
-			return decrypt_sym(servername, args, info, key)
+			return ircrypt_decrypt_sym(servername, args, info, key)
 		# if key exisits and no >CRY not part of message flag message as unencrypted
 		else:
 			pre, message = string.split(args, ' :', 1)
@@ -678,7 +678,7 @@ def decrypt(data, msgtype, servername, args):
 	return args
 
 
-def decrypt_sym(servername, args, info, key):
+def ircrypt_decrypt_sym(servername, args, info, key):
 	'''This method is called to decrypt an symmetric encrypted messages and put
 	them together again if necessary.
 
@@ -734,7 +734,7 @@ def decrypt_sym(servername, args, info, key):
 	return '%s%s' % (pre, decrypted)
 
 
-def decrypt_asym(servername, args, info):
+def ircrypt_decrypt_asym(servername, args, info):
 	'''This method is called to decrypt an asymmetric encrypted messages and put
 	them together again if necessary.
 
@@ -789,10 +789,10 @@ def decrypt_asym(servername, args, info):
 
 
 
-def encrypt(data, msgtype, servername, args):
+def ircrypt_encrypt_hook(data, msgtype, servername, args):
 	'''Hook for outgoing PRVMSG commands.
-	This method will call the functions encrypt_sym and encrypt_asym to encrypt
-	outgoing messages symmetric or asymmetric
+	This method will call the appropriate methods for encrypting the outgoing
+	messages either symmetric or asymmetric
 
 	:param data:
 	:param msgtype:
@@ -805,19 +805,19 @@ def encrypt(data, msgtype, servername, args):
 	# check symmetric key
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
 	if key:
-		return encrypt_sym(servername, args, info, key)
+		return ircrypt_encrypt_sym(servername, args, info, key)
 
 	# check asymmetric key id
 	key_id = ircrypt_asym_id.get('%s/%s' % (servername, info['channel']))
 	if key_id and weechat.config_boolean(
 				weechat.config_get('ircrypt.cipher.asym_enabled')):
-		return encrypt_asym(servername, args, info, key_id)
+		return ircrypt_encrypt_asym(servername, args, info, key_id)
 
 	# No key -> don't encrypt
 	return args
 
 
-def encrypt_sym(servername, args, info, key):
+def ircrypt_encrypt_sym(servername, args, info, key):
 	'''This method will symmetric encrypt messages and if necessary (if
 	they grow to large) split them into multiple parts.
 
@@ -865,7 +865,7 @@ def encrypt_sym(servername, args, info, key):
 
 
 
-def encrypt_asym(servername, args, info, key_id):
+def ircrypt_encrypt_asym(servername, args, info, key_id):
 	'''This method will asymmetric encrypt messages and if necessary (if
 	they grow to large) split them into multiple parts.
 
@@ -1498,8 +1498,8 @@ def ircrypt_check_binary():
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 	# register the modifiers
-	weechat.hook_modifier('irc_in_privmsg',  'decrypt', '')
-	weechat.hook_modifier('irc_out_privmsg', 'encrypt', '')
+	weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
+	weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
 	weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
 
 	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
