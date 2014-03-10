@@ -36,7 +36,7 @@
 #
 # == About ==================================================================
 #
-#  The weechat IRCrypt-Lite plug-in is a lite version of the IRCrypt plug-in.
+#  The weechat IRCrypt plug-in is a version of the IRCrypt plug-in.
 #  It will send messages encrypted to all channels for which a passphrase is
 #  set. A channel can either be a regular IRC multi-user channel (i.e.
 #  #IRCrypt) or another users nickname.
@@ -56,11 +56,11 @@
 #
 
 
-SCRIPT_NAME    = 'IRCrypt-Lite'
+SCRIPT_NAME    = 'IRCrypt'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
 SCRIPT_VERSION = 'SNAPSHOT'
 SCRIPT_LICENSE = 'FreeBSD License'
-SCRIPT_DESC    = 'IRCrypt-Lite: Encryption layer for IRC'
+SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
 
 import weechat, string, os, subprocess, base64
 import time
@@ -88,7 +88,7 @@ ircrypt_help_text = '''
 Add, change or remove key for nick or channel.
 Add, change or remove special cipher for nick or channel.
 
-%(bold)sIRCryptLite command options: %(normal)s
+%(bold)sIRCrypt command options: %(normal)s
 
 list                                                 List set keys, ids and ciphers
 set-key         [-server <server>] <target> <key>    Set key for target
@@ -336,7 +336,7 @@ def ircrypt_config_init():
 	options in memory and prepares the handling of key sections.
 	'''
 	global ircrypt_config_file, ircrypt_config_section, ircrypt_config_option
-	ircrypt_config_file = weechat.config_new('ircrypt-lite', 'ircrypt_config_reload_cb', '')
+	ircrypt_config_file = weechat.config_new('ircrypt', 'ircrypt_config_reload_cb', '')
 	if not ircrypt_config_file:
 		return
 
@@ -689,7 +689,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
 	weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
 
-	weechat.hook_command('ircrypt', 'Manage IRCrypt-Lite Keys',
+	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys',
 			'[list] '
 			'| set-key [-server <server>] <target> <key> '
 			'| remove-key [-server <server>] <target> '
