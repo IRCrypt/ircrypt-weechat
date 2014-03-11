@@ -58,7 +58,7 @@
 
 SCRIPT_NAME    = 'IRCrypt'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
-SCRIPT_VERSION = '0.2'
+SCRIPT_VERSION = '0.3'
 SCRIPT_LICENSE = 'FreeBSD License'
 SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
 
