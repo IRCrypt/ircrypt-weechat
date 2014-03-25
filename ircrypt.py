@@ -79,9 +79,6 @@ ircrypt_gpg_binary = None
 # Constants used throughout this script
 MAX_PART_LEN     = 300
 MSG_PART_TIMEOUT = 300 # 5min
-NEVER            = 0
-ALWAYS           = 1
-IF_NEW           = 2
 
 
 ircrypt_help_text = '''
@@ -185,17 +182,19 @@ def ircrypt_decrypt_hook(data, msgtype, servername, args):
 			weechat.command('','/notice %s >UCRY-NOASYM' % info['nick'])
 		return ''
 
-	# Check if channel is own nick and if change channel to nick of sender
+	# If channel is own nick, change channel to nick of sender
 	if info['channel'][0] not in '#&':
 		info['channel'] = info['nick']
 
 	# Get key
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
 	if key:
-		# if key exists and >CRY part of message start symmetric encryption
+		# If key exists and the message contains a symmetric encryption
+		# identifier (>CRY-):
 		if '>CRY-' in args:
 			return ircrypt_decrypt_sym(servername, args, info, key)
-		# if key exisits and no >CRY not part of message flag message as unencrypted
+		# If key exisits, but no >CRY is part of the message, flag message as
+		# unencrypted:
 		else:
 			pre, message = string.split(args, ' :', 1)
 			return '%s :%s %s' % (pre,
@@ -218,13 +217,13 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	global ircrypt_msg_buffer, ircrypt_config_option
 
 	pre, message    = string.split(args, '>CRY-', 1)
-	number, message = string.split(message, ' ', 1 )
+	number, message = string.split(message, ' ', 1)
 
 	# Get key for the message buffer
 	buf_key = '%s.%s.%s' % (servername, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
-	# otherwise put the message into a globa buffer and quit
+	# otherwise put the message into a global buffer and quit
 	if int(number) != 0:
 		if not buf_key in ircrypt_msg_buffer:
 			ircrypt_msg_buffer[buf_key] = MessageParts()
@@ -470,7 +469,8 @@ def ircrypt_config_special_cipher_write_cb(data, config_file, section_name):
 
 
 def ircrypt_command_list():
-	'''ircrypt command to list the keys, asymmetric identifier and Special Cipher'''
+	'''IRCrypt command to list keys and special ciphers
+	'''
 
 	global ircrypt_keys, ircrypt_cipher
 
@@ -490,7 +490,9 @@ def ircrypt_command_list():
 
 
 def ircrypt_command_set_keys(target, key):
-	'''ircrypt command to set key for target (target is a server/channel combination)'''
+	'''IRCrypt command to set key for target
+	(target is a server/channel combination)
+	'''
 	global ircrypt_keys
 	# Set key
 	ircrypt_keys[target] = key
@@ -500,7 +502,9 @@ def ircrypt_command_set_keys(target, key):
 
 
 def ircrypt_command_remove_keys(target):
-	'''ircrypt command to remove key for target (target is a server/channel combination)'''
+	'''IRCrypt command to remove key for target
+	(target is a server/channel combination)
+	'''
 	global ircrypt_keys
 	# Get buffer
 	buffer = weechat.current_buffer()
@@ -515,7 +519,9 @@ def ircrypt_command_remove_keys(target):
 
 
 def ircrypt_command_set_cip(target, cipher):
-	'''ircrypt command to set key for target (target is a server/channel combination)'''
+	'''IRCrypt command to set ciphers for target
+	(target is a server/channel combination)
+	'''
 	global ircrypt_cipher
 	# Set special cipher
 	ircrypt_cipher[target] = cipher
@@ -523,8 +529,11 @@ def ircrypt_command_set_cip(target, cipher):
 	weechat.prnt(weechat.current_buffer(),'Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
 
+
 def ircrypt_command_remove_cip(target):
-	'''ircrypt command to remove key for target (target is a server/channel combination)'''
+	'''IRCrypt command to remove ciphers for target
+	(target is a server/channel combination
+	)'''
 	global ircrypt_cipher
 	# Get buffer
 	buffer = weechat.current_buffer()
@@ -537,15 +546,14 @@ def ircrypt_command_remove_cip(target):
 	weechat.prnt(buffer, 'Removed special cipher. Use default cipher for %s instead.' % target)
 	return weechat.WEECHAT_RC_OK
 
+
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. This method is also used for
 	all commands typed into the IRCrypt buffer.
 	'''
-	global ircrypt_keys, ircrypt_cipher
-
 	argv = [a for a in args.split(' ') if a]
 
-	if argv and not argv[0] in ['list', 'buffer', 'set-key', 'remove-key',
+	if argv and not argv[0] in ['list', 'set-key', 'remove-key',
 			'set-cipher', 'remove-cipher']:
 		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
 				weechat.prefix('error'))
@@ -621,22 +629,26 @@ def ircrypt_encryption_statusbar(*args):
 	if not key:
 		return ''
 
-	# Return marer, but replace {{cipher}} with used cipher for current channel
+	# Return marker, but replace {{cipher}} with used cipher for current channel
 	return weechat.config_string(ircrypt_config_option['encrypted']).replace(
 			'{{cipher}}', ircrypt_cipher.get('%s/%s' % (server, channel),
 				weechat.config_string(ircrypt_config_option['sym_cipher'])))
 
 
 def ircrypt_notice_hook(data, msgtype, servername, args):
-
+	'''Catches IRC notices received by weechat. They are used by IRCrypt to send
+	error and warning messages as well as for the key exchange (which is not
+	supported by the lite version anyway)
+	'''
 	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
 	# Check for error messages
-	if '>UCRY-' in args:
-		# TODO: Add error handler
+	if '>UCRY-CIPHER-NOT-FOUND' in args:
+		weechat.prnt(weechat.current_buffer(),
+				'%s reported that he does not support the used cipher' % info['nick'])
 		return args
 
-	# Incomming key request.
+	# Incoming key request.
 	if '>WCRY-' in args:
 		if '>WCRY-0' in args:
 			weechat.command('','/notice %s >UCRY-NOEXCHANGE' % info['nick'])
@@ -649,7 +661,7 @@ def ircrypt_find_gpg_binary():
 	'''Check for GnuPG binary to use
 	:returns: Tuple with binary name and version.
 	'''
-	for binary in ('gpg2','gpg'):
+	for binary in ('gpg','gpg2'):
 		try:
 			p = subprocess.Popen([binary, '--version'],
 					stdout=subprocess.PIPE,
@@ -681,7 +693,15 @@ def ircrypt_check_binary():
 		weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
 
 
-# register plugin
+def ircrypt_unload_script():
+	'''Hook to ensure the configuration is properly written to disk when the
+	script is unloaded.
+	'''
+	ircrypt_config_write()
+	return weechat.WEECHAT_RC_OK
+
+
+# register plug-in
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 	# register the modifiers
@@ -706,12 +726,3 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	ircrypt_config_read()
 	ircrypt_check_binary()
 	weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
-	weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
-
-
-def ircrypt_unload_script():
-	'''Hook to ensure the configuration is properly written to disk when the
-	script is unloaded.
-	'''
-	ircrypt_config_write()
-	return weechat.WEECHAT_RC_OK
