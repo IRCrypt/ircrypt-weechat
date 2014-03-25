@@ -714,7 +714,12 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 		'--passphrase-fd', '-', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write('%s\n' % key)
-	p.stdin.write(base64.b64decode(message))
+	try:
+		p.stdin.write(base64.b64decode(message))
+	except TypeError:
+		weechat.prnt(weechat.current_buffer(), 'Could not Base64 decode message.')
+		weechat.prnt(weechat.current_buffer(), 'Aborting attempt to decode message.')
+		return args
 	p.stdin.close()
 	decrypted = p.stdout.read()
 	p.stdout.close()
