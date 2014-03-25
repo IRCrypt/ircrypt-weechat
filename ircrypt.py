@@ -236,22 +236,29 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	except KeyError:
 		pass
 
+	try:
+		decode_message = base64.b64decode(message)
+	except TypeError:
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+		weechat.prnt(buf, 'Base64 decoding not possible! Print next message without decryption.')
+		return '%s%s' % (pre, message)
+
 	# Decrypt
 	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet',
 		'--passphrase-fd', '-', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write('%s\n' % key)
-	p.stdin.write(base64.b64decode(message))
-	p.stdin.close()
-	decrypted = p.stdout.read()
-	p.stdout.close()
+	(decrypted, err) = p.communicate('%s\n%s' % (key, base64.b64decode(message)))
 
 	# Get and print GPG errors/warnings
-	err = p.stderr.read()
-	p.stderr.close()
+	#err = p.stderr.read()
+	#p.stderr.close()
 	if err:
 		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
-		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+		weechat.prnt(buf, 'GPG reported:\n%s' % err)
+
+	if p.returncode:
+		weechat.prnt(buf, 'GPG reported an error! Print next message withoud decryption.')
+		return'%s%s' % (pre, message)
 
 	# Remove old messages from buffer
 	try:
@@ -307,18 +314,18 @@ def ircrypt_encrypt_sym(servername, args, info, key):
 		cipher,
 		'--passphrase-fd', '-'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write('%s\n' % key)
-	p.stdin.write(message)
-	p.stdin.close()
-	encrypted = base64.b64encode(p.stdout.read())
-	p.stdout.close()
+	[encrypted, err] = p.communicate('%s\n%s' % (key, message))
+	encrypted = base64.b64encode(encrypted)
 
-	# Get and print GPG errors/warnings
-	err = p.stderr.read()
-	p.stderr.close()
+	if p.returncode:
+		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
+		weechat.prnt(buf, 'GPG reported an error:\n%s' % err)
+		weechat.prnt(buf, 'Message not sent.')
+		return ''
+
 	if err:
 		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
-		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+		weechat.prnt(buf, 'GPG reported:\n%s' % err)
 
 	#create output
 	output = '%s:>CRY-0 %s' % (pre, encrypted)
