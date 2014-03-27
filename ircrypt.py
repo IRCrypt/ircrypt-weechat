@@ -709,27 +709,28 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	except KeyError:
 		pass
 
+	# Decode base64 encoded message
+	try:
+		message = base64.b64decode(message)
+	except TypeError:
+		weechat.prnt(weechat.current_buffer(), '%s%sCould not Base64 decode message.' %
+				(weechat.prefix('error'), weechat.color('red')))
+		return args
+
 	# Decrypt
 	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet',
 		'--passphrase-fd', '-', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write('%s\n' % key)
-	try:
-		p.stdin.write(base64.b64decode(message))
-	except TypeError:
-		weechat.prnt(weechat.current_buffer(), 'Could not Base64 decode message.')
-		weechat.prnt(weechat.current_buffer(), 'Aborting attempt to decode message.')
-		return args
-	p.stdin.close()
-	decrypted = p.stdout.read()
-	p.stdout.close()
+	decrypted, err = p.communicate('%s\n%s' % (key, message))
 
 	# Get and print GPG errors/warnings
-	err = p.stderr.read()
-	p.stderr.close()
-	if err:
-		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
-		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+	err = '\n'.join(['  ▼ ' + line for line in err.split('\n') if line])
+	if p.returncode:
+		weechat.prnt(weechat.current_buffer(), '%s%s%s' %
+				(weechat.prefix('error'), weechat.color('red'), err))
+		return args
+	elif err:
+		weechat.prnt(weechat.current_buffer(), '%s%s' % (weechat.color('gray'), err))
 
 	# Remove old messages from buffer
 	try:
