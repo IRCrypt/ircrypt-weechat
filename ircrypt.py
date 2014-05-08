@@ -709,11 +709,14 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	except KeyError:
 		pass
 
+	# Get message buffer in case we need to print an error
+	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+
 	# Decode base64 encoded message
 	try:
 		message = base64.b64decode(message)
 	except TypeError:
-		weechat.prnt(weechat.current_buffer(), '%s%sCould not Base64 decode message.' %
+		weechat.prnt(buf, '%s%sCould not Base64 decode message.' %
 				(weechat.prefix('error'), weechat.color('red')))
 		return args
 
@@ -726,11 +729,11 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	# Get and print GPG errors/warnings
 	err = '\n'.join(['  ▼ ' + line for line in err.split('\n') if line])
 	if p.returncode:
-		weechat.prnt(weechat.current_buffer(), '%s%s%s' %
+		weechat.prnt(buf, '%s%s%s' %
 				(weechat.prefix('error'), weechat.color('red'), err))
 		return args
 	elif err:
-		weechat.prnt(weechat.current_buffer(), '%s%s' % (weechat.color('gray'), err))
+		weechat.prnt(buf, '%s%s' % (weechat.color('gray'), err))
 
 	# Remove old messages from buffer
 	try:
@@ -771,6 +774,9 @@ def ircrypt_decrypt_asym(servername, args, info):
 	except KeyError:
 		pass
 
+	# Get message buffer in case we need to print an error
+	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+
 	# Decrypt
 	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -783,7 +789,6 @@ def ircrypt_decrypt_asym(servername, args, info):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	# Remove old messages from buffer
