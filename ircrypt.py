@@ -67,19 +67,20 @@ import time
 
 # Global buffers used to store message parts, pending requests, configuration
 # options, keys, etc.
-ircrypt_msg_buffer = {}
-ircrypt_config_file = None
-ircrypt_config_section = {}
-ircrypt_config_option = {}
-ircrypt_keys = {}
-ircrypt_asym_id = {}
-ircrypt_cipher = {}
-ircrypt_buffer = None
+ircrypt_msg_buffer       = {}
+ircrypt_config_file      = None
+ircrypt_config_section   = {}
+ircrypt_config_option    = {}
+ircrypt_keys             = {}
+ircrypt_asym_id          = {}
+ircrypt_cipher           = {}
+ircrypt_buffer           = None
 ircrypt_pending_requests = []
-ircrypt_request_buffer = {}
-ircrypt_pending_keys = []
-ircrypt_keys_buffer = {}
-ircrypt_gpg_binary = None
+ircrypt_request_buffer   = {}
+ircrypt_pending_keys     = []
+ircrypt_keys_buffer      = {}
+ircrypt_gpg_binary       = None
+ircrypt_gpg_binary_asym  = None
 
 # Constants used throughout this script
 MAX_PART_LEN     = 300
@@ -421,7 +422,7 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 		return weechat.WEECHAT_RC_OK
 
 	# encrypt and sign channel with gpg2
-	p = subprocess.Popen([ircrypt_gpg_binary, '--sign', '--encrypt', '-r',
+	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--sign', '--encrypt', '-r',
 		key_id, '--batch', '--no-tty'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 		stderr=subprocess.PIPE)
 	p.stdin.write(channel)
@@ -603,7 +604,7 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 		return weechat.WEECHAT_RC_OK
 
 	# encrypt and sign channel and key with gpg2
-	p = subprocess.Popen([ircrypt_gpg_binary, '--sign', '--encrypt', '-r',
+	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--sign', '--encrypt', '-r',
 		key_id, '--batch', '--no-tty'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 		stderr=subprocess.PIPE)
 	p.stdin.write('%s %s' % (channel, key))
@@ -778,7 +779,7 @@ def ircrypt_decrypt_asym(servername, args, info):
 	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
 
 	# Decrypt
-	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet', '-d'],
+	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty', '--quiet', '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
@@ -890,7 +891,7 @@ def ircrypt_encrypt_asym(servername, args, info, key_id):
 	pre, message = string.split(args, ':', 1)
 
 	# Encrypt message
-	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet', '-e', '-r',
+	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty', '--quiet', '-e', '-r',
 		key_id], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 		stderr=subprocess.PIPE)
 	p.stdin.write(message)
@@ -968,6 +969,10 @@ def ircrypt_config_init():
 	ircrypt_config_option['binary'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['general'],
 			'binary', 'string', 'GnuPG binary to use', '', 0, 0,
+			'', '', 0, '', '', '', '', '', '')
+	ircrypt_config_option['binary_asym'] = weechat.config_new_option(
+			ircrypt_config_file, ircrypt_config_section['general'],
+			'binary_asym', 'string', 'GnuPG binary to use for asymmetric cryptography', '', 0, 0,
 			'', '', 0, '', '', '', '', '', '')
 
 	# keys
@@ -1223,7 +1228,7 @@ def ircrypt_command_verify_requests(server, nick):
 		server = req[0]
 		nick   = req[1]
 		# Decrypt and show signature
-		p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet',
+		p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty', '--quiet',
 			'-d'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE)
 		p.stdin.write(base64.b64decode(req[2]))
@@ -1288,7 +1293,7 @@ def ircrypt_command_verify_keys(server, nick):
 		server = key[0]
 		nick   = key[1]
 		# Decrypt and show signature
-		p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet',
+		p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty', '--quiet',
 			'-d'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE)
 		p.stdin.write(base64.b64decode(key[2]))
@@ -1469,11 +1474,11 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 	return args
 
 
-def ircrypt_find_gpg_binary():
+def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
 	'''Check for GnuPG binary to use
 	:returns: Tuple with binary name and version.
 	'''
-	for binary in ('gpg2','gpg'):
+	for binary in names:
 		try:
 			p = subprocess.Popen([binary, '--version'],
 					stdout=subprocess.PIPE,
@@ -1490,19 +1495,27 @@ def ircrypt_find_gpg_binary():
 def ircrypt_check_binary():
 	'''If binary is not set, try to determine it automatically
 	'''
-	global ircrypt_gpg_binary
+	global ircrypt_gpg_binary, ircrypt_gpg_binary_asym
 	ircrypt_gpg_binary = weechat.config_string(ircrypt_config_option['binary'])
-	if ircrypt_gpg_binary:
-		return
-	ircrypt_gpg_binary,version = ircrypt_find_gpg_binary()
 	if not ircrypt_gpg_binary:
-		weechat.prnt('', '%sAutomatic detection of the GnuPG binary failed and '
-				'nothing is set manually. You wont be able to use IRCrypt like '
-				'this. Please install GnuPG or set the path to the binary to '
-				'use.' % weechat.prefix('error'))
-	else:
-		weechat.prnt('', 'Found %s' % version)
-		weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
+		ircrypt_gpg_binary,version = ircrypt_find_gpg_binary(('gpg','gpg2'))
+		if not ircrypt_gpg_binary:
+			weechat.prnt('', '%sAutomatic detection of the GnuPG binary failed and '
+					'nothing is set manually. You wont be able to use IRCrypt like '
+					'this. Please install GnuPG or set the path to the binary to '
+					'use.' % weechat.prefix('error'))
+		else:
+			weechat.prnt('', 'Found %s' % version)
+			weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
+	# We may use a different binary for asymmetric cryptography
+	ircrypt_gpg_binary_asym = weechat.config_string(ircrypt_config_option['binary_asym'])
+	if not ircrypt_gpg_binary_asym:
+		ircrypt_gpg_binary,version = ircrypt_find_gpg_binary()
+		if not ircrypt_gpg_binary_asym:
+			ircrypt_gpg_binary_asym = ircrypt_gpg_binary
+		if ircrypt_gpg_binary_asym:
+			weechat.prnt('', 'Found %s' % version)
+			weechat.config_option_set(ircrypt_config_option['binary_asym'], ircrypt_gpg_binary, 1)
 
 
 # register plugin
