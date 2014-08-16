@@ -81,6 +81,7 @@ ircrypt_pending_keys     = []
 ircrypt_keys_buffer      = {}
 ircrypt_gpg_binary       = None
 ircrypt_gpg_binary_asym  = None
+ircrypt_message_plain    = {}
 
 # Constants used throughout this script
 MAX_PART_LEN     = 300
@@ -108,6 +109,7 @@ remove-cipher   [-server <server>] <target>          Remove specific cipher for 
 exchange        [-server <server>] <nick> [<target>] Request key for channel from nick
 verify-requests [-server <server>] [<nick>]          Check signature of incomming key requests
 verify-keys     [-server <server>] [<nick>]          Check signature of received keys
+plain           [-server <s>] [-channel <ch>] <msg>  Send unencrypted message
 
 
 %(bold)sExamples: %(normal)s
@@ -126,6 +128,8 @@ Switch to a specific cipher for a channel:
   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
 Unset the specific cipher for a channel:
   /ircrypt remove-cipher #IRCrypt
+Send unencrypted “Hello” to current channel
+  /ircrypt plain Hello
 
 
 %(bold)sConfiguration: %(normal)s
@@ -814,6 +818,18 @@ def ircrypt_encrypt_hook(data, msgtype, servername, args):
 	global ircrypt_keys, ircrypt_asym_id
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
 
+	# check if this message is to be send as plain text
+	plain = ircrypt_message_plain.get('%s/%s' % (servername, info['channel']))
+	if plain:
+		del ircrypt_message_plain['%s/%s' % (servername, info['channel'])]
+		if (plain[0] - time.time()) < 5 \
+				and args == 'PRIVMSG %s :%s' % (info['channel'], plain[1]):
+			args = args.replace('PRIVMSG %s :%s ' % (
+				info['channel'],
+				weechat.config_string(ircrypt_config_option['unencrypted'])),
+				'PRIVMSG %s :' % info['channel'])
+			return args
+
 	# check symmetric key
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
 	if key:
@@ -1335,7 +1351,7 @@ def ircrypt_command(data, buffer, args):
 
 	if argv and not argv[0] in ['list', 'buffer', 'set-key', 'remove-key',
 			'set-gpg-id', 'remove-gpg-id', 'set-cipher', 'remove-cipher',
-			'exchange', 'verify-requests', 'verify-keys']:
+			'exchange', 'verify-requests', 'verify-keys', 'plain']:
 		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
 				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
@@ -1378,6 +1394,23 @@ def ircrypt_command(data, buffer, args):
 		# if no server was set print message in ircrypt buffer and throw error
 		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
 		return weechat.WEECHAT_RC_ERROR
+
+	if argv[:1] == ['plain']:
+		channel = ''
+		if (len(argv) > 2 and argv[1] == '-channel'):
+			channel = argv[2]
+			del argv[2]
+			del argv[1]
+			args = args.split(' ', 2)[-1]
+		else:
+			# Try to determine the server automatically
+			channel = weechat.buffer_get_string(buffer, 'localvar_channel')
+		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
+		msg = marker + ' ' + args.split(' ', 1)[-1]
+		ircrypt_message_plain['%s/%s' % (server_name, channel)] = (time.time(), msg)
+		weechat.command('','/msg -server %s %s %s' % \
+				(server_name, channel, msg))
+		return weechat.WEECHAT_RC_OK
 
 	# For the remaining commands we need at least one additional argument
 	if len(argv) < 2:
@@ -1537,7 +1570,8 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| remove-cipher [-server <server>] <target> '
 			'| exchange [-server <server>] <nick> [<target>] '
 			'| verify-requests [-server <server>] [<nick>] '
-			'| verify-keys [-server <server>] [<nick>]',
+			'| verify-keys [-server <server>] [<nick>] '
+			'| plain [-server <server>] [-channel <channel>] <message>',
 			ircrypt_help_text,
 			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
@@ -1545,9 +1579,10 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'|| verify-requests %(nicks)|-server %(irc_servers) %- '
 			'|| verify-keys %(nicks)|-server %(irc_servers) %- '
 			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
-			'|| remove-gpg-id %(nicks)|-server %(irc_servers) %-'
+			'|| remove-gpg-id %(nicks)|-server %(irc_servers) %- '
 			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
-			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %-',
+			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
+			'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
 
 	ircrypt_config_init()
