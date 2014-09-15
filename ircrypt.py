@@ -291,7 +291,7 @@ def ircrypt_buffer_input_cb(data, buffer, args):
 				weechat.prnt(buffer, 'Accepted %s\'s key for channel %s (server %s).' % \
 						(nick, channel, server))
 				# Set key for server/channel
-				ircrypt_keys['%s/%s' % (server, channel)] = key
+				ircrypt_keys[('%s/%s' % (server, channel)).lower()] = key
 				del ircrypt_pending_keys[i]
 				return weechat.WEECHAT_RC_OK
 		# Nothing to accept
@@ -418,7 +418,7 @@ def ircrypt_keyex_askkey(nick, channel, servername):
 		channel = nick
 
 	# Get asymetric identifier of nick
-	key_id = ircrypt_asym_id.get('%s/%s' % (servername, nick))
+	key_id = ircrypt_asym_id.get(('%s/%s' % (servername, nick)).lower())
 
 	# Check if asymetric identifer exists
 	if not key_id:
@@ -592,8 +592,8 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 		channel = nick
 
 	# Get key and asymmetric identifier
-	key = ircrypt_keys.get('%s/%s' % (servername, channel))
-	key_id = ircrypt_asym_id.get('%s/%s' % (servername, nick))
+	key = ircrypt_keys.get(('%s/%s' % (servername, channel)).lower())
+	key_id = ircrypt_asym_id.get(('%s/%s' % (servername, nick)).lower())
 
 	# Check if key exists
 	if not key:
@@ -667,7 +667,7 @@ def ircrypt_decrypt_hook(data, msgtype, servername, args):
 		info['channel'] = info['nick']
 
 	# Get key
-	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+	key = ircrypt_keys.get(('%s/%s' % (servername, info['channel'])).lower())
 	if key:
 		# if key exists and >CRY part of message start symmetric encryption
 		if '>CRY-' in args:
@@ -831,12 +831,12 @@ def ircrypt_encrypt_hook(data, msgtype, servername, args):
 			return args
 
 	# check symmetric key
-	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
+	key = ircrypt_keys.get(('%s/%s' % (servername, info['channel'])).lower())
 	if key:
 		return ircrypt_encrypt_sym(servername, args, info, key)
 
 	# check asymmetric key id
-	key_id = ircrypt_asym_id.get('%s/%s' % (servername, info['channel']))
+	key_id = ircrypt_asym_id.get(('%s/%s' % (servername, info['channel'])).lower())
 	if key_id and weechat.config_boolean(
 				weechat.config_get('ircrypt.cipher.asym_enabled')):
 		return ircrypt_encrypt_asym(servername, args, info, key_id)
@@ -858,7 +858,7 @@ def ircrypt_encrypt_sym(servername, args, info, key):
 	global ircrypt_cipher
 
 	# Get cipher
-	cipher = ircrypt_cipher.get('%s/%s' % (servername, info['channel']),
+	cipher = ircrypt_cipher.get(('%s/%s' % (servername, info['channel'])).lower(),
 			weechat.config_string(ircrypt_config_option['sym_cipher']))
 	# Get prefix and message
 	pre, message = string.split(args, ':', 1)
@@ -1045,7 +1045,7 @@ def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 			'string', 'key', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
 		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
 
-	ircrypt_keys[option_name] = value
+	ircrypt_keys[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
 
@@ -1056,7 +1056,7 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 
 	weechat.config_write_line(config_file, section_name, '')
 	for target, key in sorted(ircrypt_keys.iteritems()):
-		weechat.config_write_line(config_file, target, key)
+		weechat.config_write_line(config_file, target.lower(), key)
 
 	return weechat.WEECHAT_RC_OK
 
@@ -1070,7 +1070,7 @@ def ircrypt_config_asym_id_read_cb(data, config_file, section_name, option_name,
 			'string', 'asym_id', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
 		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
 
-	ircrypt_asym_id[option_name] = value
+	ircrypt_asym_id[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
 
@@ -1081,7 +1081,7 @@ def ircrypt_config_asym_id_write_cb(data, config_file, section_name):
 
 	weechat.config_write_line(config_file, section_name, '')
 	for target, asym_id in sorted(ircrypt_asym_id.iteritems()):
-		weechat.config_write_line(config_file, target, asym_id)
+		weechat.config_write_line(config_file, target.lower(), asym_id)
 
 	return weechat.WEECHAT_RC_OK
 
@@ -1097,7 +1097,7 @@ def ircrypt_config_special_cipher_read_cb(data, config_file, section_name,
 			'', ''):
 		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
 
-	ircrypt_cipher[option_name] = value
+	ircrypt_cipher[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
 
@@ -1108,7 +1108,7 @@ def ircrypt_config_special_cipher_write_cb(data, config_file, section_name):
 
 	weechat.config_write_line(config_file, section_name, '')
 	for target, cipher in sorted(ircrypt_cipher.iteritems()):
-		weechat.config_write_line(config_file, target, cipher)
+		weechat.config_write_line(config_file, target.lower(), cipher)
 
 	return weechat.WEECHAT_RC_OK
 
@@ -1123,15 +1123,15 @@ def ircrypt_command_list():
 	# Print keys, asymmetric identifier and special cipher in current buffer
 	weechat.prnt(buffer,'\nKeys:')
 	for servchan,key in ircrypt_keys.iteritems():
-		weechat.prnt(buffer,'%s : %s' % (servchan, key))
+		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), key))
 
 	weechat.prnt(buffer,'\nAsymmetric identifier:')
 	for servchan,ids in ircrypt_asym_id.iteritems():
-		weechat.prnt(buffer,'%s : %s' % (servchan, ids))
+		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), ids))
 
 	weechat.prnt(buffer,'\nSpecial Cipher:')
 	for servchan,spcip in ircrypt_cipher.iteritems():
-		weechat.prnt(buffer,'%s : %s' % (servchan, spcip))
+		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), spcip))
 
 	weechat.prnt(buffer,'\n')
 	return weechat.WEECHAT_RC_OK
@@ -1141,7 +1141,7 @@ def ircrypt_command_set_keys(target, key):
 	'''ircrypt command to set key for target (target is a server/channel combination)'''
 	global ircrypt_keys
 	# Set key
-	ircrypt_keys[target] = key
+	ircrypt_keys[target.lower()] = key
 	# Print status message to current buffer
 	weechat.prnt(weechat.current_buffer(),'Set key for %s' % target)
 	return weechat.WEECHAT_RC_OK
@@ -1153,11 +1153,11 @@ def ircrypt_command_remove_keys(target):
 	# Get buffer
 	buffer = weechat.current_buffer()
 	# Check if key is set and print error in current buffer otherwise
-	if target not in ircrypt_keys:
+	if target.lower() not in ircrypt_keys:
 		weechat.prnt(buffer, 'No existing key for %s.' % target)
 		return weechat.WEECHAT_RC_OK
 	# Delete key and print status message in current buffer
-	del ircrypt_keys[target]
+	del ircrypt_keys[target.lower()]
 	weechat.prnt(buffer, 'Removed key for %s' % target)
 	return weechat.WEECHAT_RC_OK
 
@@ -1166,7 +1166,7 @@ def ircrypt_command_set_pub(target, pub):
 	'''ircrypt command to set asymmetric identifier for target (target is a server/channel combination)'''
 	global ircrypt_asym_id
 	# Set asymmetric identifier
-	ircrypt_asym_id[target] = pub
+	ircrypt_asym_id[target.lower()] = pub
 	# Print status message in current buffer
 	weechat.prnt(weechat.current_buffer(), 'Set asymmetric identifier for %s' % target)
 	return weechat.WEECHAT_RC_OK
@@ -1178,11 +1178,11 @@ def ircrypt_command_remove_pub(target):
 	# Get buffer
 	buffer = weechat.current_buffer()
 	# Check if asymmetric identifier is set and print error in current buffer otherwise
-	if target not in ircrypt_asym_id:
+	if target.lower() not in ircrypt_asym_id:
 		weechat.prnt(buffer, 'No existing asymmetric identifier for %s.' % target)
 		return weechat.WEECHAT_RC_OK
 	# Delete asymmetric identifier and print status message in current buffer
-	del ircrypt_asym_id[target]
+	del ircrypt_asym_id[target.lower()]
 	weechat.prnt(buffer, 'Removed asymmetric identifier for %s' % target)
 	return weechat.WEECHAT_RC_OK
 
@@ -1191,7 +1191,7 @@ def ircrypt_command_set_cip(target, cipher):
 	'''ircrypt command to set key for target (target is a server/channel combination)'''
 	global ircrypt_cipher
 	# Set special cipher
-	ircrypt_cipher[target] = cipher
+	ircrypt_cipher[target.lower()] = cipher
 	# Print status message in current buffer
 	weechat.prnt(weechat.current_buffer(),'Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
@@ -1202,11 +1202,11 @@ def ircrypt_command_remove_cip(target):
 	# Get buffer
 	buffer = weechat.current_buffer()
 	# Check if special cipher is set and print error in current buffer otherwise
-	if target not in ircrypt_cipher:
+	if target.lower() not in ircrypt_cipher:
 		weechat.prnt(buffer, 'No special cipher set for %s.' % target)
 		return weechat.WEECHAT_RC_OK
 	# Delete special cipher and print status message in current buffer
-	del ircrypt_cipher[target]
+	del ircrypt_cipher[target.lower()]
 	weechat.prnt(buffer, 'Removed special cipher. Use default cipher for %s instead.' % target)
 	return weechat.WEECHAT_RC_OK
 
@@ -1476,7 +1476,7 @@ def ircrypt_encryption_statusbar(*args):
 
 	channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
-	key = ircrypt_keys.get('%s/%s' % (server, channel))
+	key = ircrypt_keys.get(('%s/%s' % (server, channel)).lower())
 
 	# Return nothing if no key is set for current channel
 	if not key:
@@ -1484,7 +1484,7 @@ def ircrypt_encryption_statusbar(*args):
 
 	# Return marer, but replace {{cipher}} with used cipher for current channel
 	return weechat.config_string(ircrypt_config_option['encrypted']).replace(
-			'{{cipher}}', ircrypt_cipher.get('%s/%s' % (server, channel),
+			'{{cipher}}', ircrypt_cipher.get(('%s/%s' % (server, channel)).lower(),
 				weechat.config_string(ircrypt_config_option['sym_cipher'])))
 
 
