@@ -75,6 +75,7 @@ ircrypt_config_option = {}
 ircrypt_keys = {}
 ircrypt_cipher = {}
 ircrypt_gpg_binary = None
+ircrypt_message_plain = {}
 
 # Constants used throughout this script
 MAX_PART_LEN     = 300
@@ -92,6 +93,7 @@ set-key         [-server <server>] <target> <key>    Set key for target
 remove-key      [-server <server>] <target>          Remove key for target
 set-cipher      [-server <server>] <target> <cipher> Set specific cipher for channel
 remove-cipher   [-server <server>] <target>          Remove specific cipher for channel
+plain           [-server <s>] [-channel <ch>] <msg>  Send unencrypted message
 
 
 %(bold)sExamples: %(normal)s
@@ -106,7 +108,8 @@ Switch to a specific cipher for a channel:
   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
 Unset the specific cipher for a channel:
   /ircrypt remove-cipher #IRCrypt
-
+Send unencrypted “Hello” to current channel
+  /ircrypt plain Hello
 
 %(bold)sConfiguration: %(normal)s
 
@@ -280,6 +283,18 @@ def ircrypt_encrypt_hook(data, msgtype, servername, args):
 	'''
 	global ircrypt_keys
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+
+	# check if this message is to be send as plain text
+	plain = ircrypt_message_plain.get('%s/%s' % (servername, info['channel']))
+	if plain:
+		del ircrypt_message_plain['%s/%s' % (servername, info['channel'])]
+		if (plain[0] - time.time()) < 5 \
+				and args == 'PRIVMSG %s :%s' % (info['channel'], plain[1]):
+			args = args.replace('PRIVMSG %s :%s ' % (
+				info['channel'],
+				weechat.config_string(ircrypt_config_option['unencrypted'])),
+				'PRIVMSG %s :' % info['channel'])
+			return args
 
 	# check symmetric key
 	key = ircrypt_keys.get('%s/%s' % (servername, info['channel']))
@@ -561,7 +576,7 @@ def ircrypt_command(data, buffer, args):
 	argv = [a for a in args.split(' ') if a]
 
 	if argv and not argv[0] in ['list', 'set-key', 'remove-key',
-			'set-cipher', 'remove-cipher']:
+			'set-cipher', 'remove-cipher', 'plain']:
 		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
 				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
@@ -585,6 +600,23 @@ def ircrypt_command(data, buffer, args):
 		# if no server was set print message in ircrypt buffer and throw error
 		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
 		return weechat.WEECHAT_RC_ERROR
+
+	if argv[:1] == ['plain']:
+		channel = ''
+		if (len(argv) > 2 and argv[1] == '-channel'):
+			channel = argv[2]
+			del argv[2]
+			del argv[1]
+			args = args.split(' ', 2)[-1]
+		else:
+			# Try to determine the server automatically
+			channel = weechat.buffer_get_string(buffer, 'localvar_channel')
+		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
+		msg = marker + ' ' + args.split(' ', 1)[-1]
+		ircrypt_message_plain['%s/%s' % (server_name, channel)] = (time.time(), msg)
+		weechat.command('','/msg -server %s %s %s' % \
+				(server_name, channel, msg))
+		return weechat.WEECHAT_RC_OK
 
 	# For the remaining commands we need at least one additional argument
 	if len(argv) < 2:
@@ -721,12 +753,14 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| set-key [-server <server>] <target> <key> '
 			'| remove-key [-server <server>] <target> '
 			'| set-cipher [-server <server>] <target> <cipher> '
-			'| remove-cipher [-server <server>] <target> ',
+			'| remove-cipher [-server <server>] <target>  '
+			'| plain [-server <server>] [-channel <channel>] <message>',
 			ircrypt_help_text,
 			'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
-			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %-',
+			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %-'
+			'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
 			'ircrypt_command', '')
 
 	ircrypt_config_init()
