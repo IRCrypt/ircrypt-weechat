@@ -190,7 +190,7 @@ def ircrypt_decrypt_hook(data, msgtype, servername, args):
 		info['channel'] = info['nick']
 
 	# Get key
-	key = ircrypt_keys.get(('%s/%s' % (servername, info['channel']).lower()))
+	key = ircrypt_keys.get(('%s/%s' % (servername, info['channel'])).lower())
 	if key:
 		# If key exists and the message contains a symmetric encryption
 		# identifier (>CRY-):
