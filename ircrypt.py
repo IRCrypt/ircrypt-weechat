@@ -567,7 +567,7 @@ def ircrypt_keyex_receive_key(servername, args, info):
 
 	weechat.prnt(ircrypt_get_buffer(),
 			u'  Type %sverify-keys [-server server] [nick]%s '
-			'to verify the signature of this keys(s).' % 
+			'to verify the signature of this keys(s).' %
 			(weechat.color('bold'), weechat.color('-bold')))
 	# return empty message
 	return ''
@@ -971,8 +971,7 @@ def ircrypt_config_init():
 			'off', 'off', 0, '', '', '', '', '', '')
 	ircrypt_config_option['exchange_enabled'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['cipher'], 'exchange_enabled',
-			'boolean', 'If key exchange is enabled',
-			'', 0, 0,
+			'boolean', 'If key exchange is enabled', '', 0, 0,
 			'off', 'off', 0, '', '', '', '', '', '')
 
 	# general options
@@ -989,6 +988,11 @@ def ircrypt_config_init():
 	ircrypt_config_option['binary_asym'] = weechat.config_new_option(
 			ircrypt_config_file, ircrypt_config_section['general'],
 			'binary_asym', 'string', 'GnuPG binary to use for asymmetric cryptography', '', 0, 0,
+			'', '', 0, '', '', '', '', '', '')
+	ircrypt_config_option['encrypt_keys_key'] = weechat.config_new_option(
+			ircrypt_config_file, ircrypt_config_section['general'],
+			'encrypt_keys_key', 'string',
+			'GnuPG key to use for encrypting symmetric keys', '', 0, 0,
 			'', '', 0, '', '', '', '', '', '')
 
 	# keys
@@ -1045,6 +1049,26 @@ def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 			'string', 'key', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
 		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
 
+	# Do we need to decrypt the keys?
+	if weechat.config_string(
+			weechat.config_get('ircrypt.general.encrypt_keys_key')):
+		# We need a binary. Atodetection was not yet called at this point thus we
+		# try to get it from configuration. If there is none, we cannot decrypt
+		# the keys, but that probably means that it's the first start anyway.
+		gpgbin = weechat.config_string(ircrypt_config_option['binary_asym'])
+		try:
+			data = base64.b64decode(value)
+			p = subprocess.Popen([gpgbin, '--batch',  '--no-tty', '--quiet', '-d'],
+				stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+			p.stdin.write(data)
+			p.stdin.close()
+			decrypted = p.stdout.read()
+			p.stdout.close()
+			if decrypted:
+				value = decrypted
+		except:
+			pass
+
 	ircrypt_keys[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
@@ -1056,9 +1080,27 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 
 	weechat.config_write_line(config_file, section_name, '')
 	for target, key in sorted(ircrypt_keys.iteritems()):
+		# Do we need to decrypt the keys?
+		enc_key_id = weechat.config_string(
+				weechat.config_get('ircrypt.general.encrypt_keys_key'))
+		if enc_key_id:
+			try:
+				p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',
+					'--no-tty', '--quiet', '-e', '-r', enc_key_id],
+					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+					stderr=subprocess.PIPE)
+				p.stdin.write(key)
+				p.stdin.close()
+				encrypted = base64.b64encode(p.stdout.read())
+				p.stdout.close()
+				if encrypted:
+					key = encrypted
+			except:
+				pass
 		weechat.config_write_line(config_file, target.lower(), key)
 
 	return weechat.WEECHAT_RC_OK
+
 
 def ircrypt_config_asym_id_read_cb(data, config_file, section_name, option_name,
 		value):
