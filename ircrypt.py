@@ -82,6 +82,7 @@ ircrypt_keys_buffer      = {}
 ircrypt_gpg_binary       = None
 ircrypt_gpg_binary_asym  = None
 ircrypt_message_plain    = {}
+ircrypt_gpg_homedir      = None
 
 # Constants used throughout this script
 MAX_PART_LEN     = 300
@@ -1551,6 +1552,52 @@ def ircrypt_check_binary():
 			weechat.config_option_set(ircrypt_config_option['binary_asym'], ircrypt_gpg_binary, 1)
 
 
+def ircrypt_init():
+	ircrypt_gpg_homedir = '%s/ircrypt' % weechat.info_get("weechat_dir", "")
+	oldmask = os.umask(077)
+	try:
+		os.mkdir(ircrypt_gpg_homedir)
+	except OSError:
+		pass
+	os.umask(oldmask)
+
+	# Probe for GPG key
+	p = subprocess.Popen([ircrypt_gpg_binary, '--sign', '--homedir',
+			ircrypt_gpg_homedir, '--batch', '--no-tty'],
+			stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE)
+	p.communicate(' ')
+	if not p.returncode:
+		# There is a gpg key
+		return
+
+	# Try to generate a key
+	weechat.prnt('','Try to generate a key')
+	hook = weechat.hook_process_hashtable(ircrypt_gpg_binary, {
+		'stdin': '1',
+		'arg1': '--batch',
+		'arg2': '--no-tty',
+		'arg3': '--quiet',
+		'arg4': '--homedir',
+		'arg5': ircrypt_gpg_homedir,
+		'arg6': '--gen-key'},
+		0, 'ircrypt_key_generated_cb', '')
+	gen_command = 'Key-Type: RSA\n' \
+			+ 'Key-Length: 2048\n' \
+			+ 'Subkey-Type: RSA\n' \
+			+ 'Subkey-Length: 2048\n' \
+			+ 'Name-comment: ircrypt\n' \
+			+ 'Expire-Date: 0\n' \
+			+ '%commit'
+
+	weechat.hook_set(hook, 'stdin', gen_command)
+	weechat.hook_set(hook, 'stdin_close', '')
+
+
+def ircrypt_key_generated_cb(data, command, returncode, out, err):
+	weechat.prnt('','Key generated')
+
+
 # register plugin
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
@@ -1588,6 +1635,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	ircrypt_config_init()
 	ircrypt_config_read()
 	ircrypt_check_binary()
+	ircrypt_init()
 	weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
 	weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
 
