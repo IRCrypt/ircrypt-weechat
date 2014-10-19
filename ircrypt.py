@@ -654,13 +654,8 @@ def ircrypt_decrypt_hook(data, msgtype, servername, args):
 
 	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
-	# Check if asymmetric encrypted and if asymetric encryption is enabled
+	# asymmetric encryption
 	if '>ACRY-' in args:
-		if not weechat.config_boolean(
-				weechat.config_get('ircrypt.cipher.asym_enabled')):
-			weechat.command('','/notice %s >UCRY-NOASYM' % info['nick'])
-			return ''
-
 		return ircrypt_decrypt_asym(servername, args, info)
 
 	# Check if channel is own nick and if change channel to nick of sender
@@ -784,7 +779,8 @@ def ircrypt_decrypt_asym(servername, args, info):
 	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
 
 	# Decrypt
-	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty', '--quiet', '-d'],
+	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty',
+		'--quiet', '--homedir', ircrypt_gpg_homedir, '-d'],
 		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	p.stdin.write(base64.b64decode(message))
 	p.stdin.close()
@@ -908,8 +904,9 @@ def ircrypt_encrypt_asym(servername, args, info, key_id):
 	pre, message = string.split(args, ':', 1)
 
 	# Encrypt message
-	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty', '--quiet', '-e', '-r',
-		key_id], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty',
+		'--quiet', '--homedir', ircrypt_gpg_homedir, '-e', '-r', key_id],
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 		stderr=subprocess.PIPE)
 	p.stdin.write(message)
 	p.stdin.close()
@@ -1595,7 +1592,11 @@ def ircrypt_init():
 
 
 def ircrypt_key_generated_cb(data, command, returncode, out, err):
-	weechat.prnt('','Key generated')
+	if return_code:
+		weechat.prnt('','Could not generate key')
+	else:
+		weechat.prnt('','Key generated')
+	return weechat.WEECHAT_RC_OK
 
 
 # register plugin
