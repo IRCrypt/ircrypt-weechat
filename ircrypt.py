@@ -905,9 +905,8 @@ def ircrypt_encrypt_asym(servername, args, info, key_id):
 
 	# Encrypt message
 	p = subprocess.Popen([ircrypt_gpg_binary_asym, '--batch',  '--no-tty',
-		'--quiet', '--homedir', ircrypt_gpg_homedir, '-e', '-r', key_id],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-		stderr=subprocess.PIPE)
+		'--quiet', '--homedir', ircrypt_gpg_homedir, '--trust-model', 'always', '--sign', '-e', '-r', key_id],
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 	p.stdin.write(message)
 	p.stdin.close()
 	encrypted = base64.b64encode(p.stdout.read())
@@ -1550,6 +1549,7 @@ def ircrypt_check_binary():
 
 
 def ircrypt_init():
+	global ircrypt_gpg_homedir
 	ircrypt_gpg_homedir = '%s/ircrypt' % weechat.info_get("weechat_dir", "")
 	oldmask = os.umask(077)
 	try:
