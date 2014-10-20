@@ -83,6 +83,7 @@ ircrypt_gpg_binary       = None
 ircrypt_gpg_binary_asym  = None
 ircrypt_message_plain    = {}
 ircrypt_gpg_homedir      = None
+ircrypt_gpg_id           = None
 
 # Constants used throughout this script
 MAX_PART_LEN     = 300
@@ -568,7 +569,7 @@ def ircrypt_keyex_receive_key(servername, args, info):
 
 	weechat.prnt(ircrypt_get_buffer(),
 			u'  Type %sverify-keys [-server server] [nick]%s '
-			'to verify the signature of this keys(s).' % 
+			'to verify the signature of this keys(s).' %
 			(weechat.color('bold'), weechat.color('-bold')))
 	# return empty message
 	return ''
@@ -639,6 +640,22 @@ def ircrypt_keyex_sendkey(nick, channel, servername):
 
 	return weechat.WEECHAT_RC_OK
 
+
+def ircrypt_public_key_send(servername, args, info):
+	global ircrypt_gpg_homedir, ircrypt_gpg_id
+
+	if ircrypt_gpg_id:
+		p = subprocess.Popen([ircrypt_gpg_binary, '--batch', '--no-tty',
+			'--quiet', '--homedir', ircrypt_gpg_homedir,'--export',
+			ircrypt_gpg_id], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE)
+		(key, err) = p.communicate()
+		key = base64.b64encode(key)
+
+	for i in range(1 + (len(key) / 400))[::-1]:
+		msg = '>KCRY-%i %s' % (i, key[i*400:(i+1)*400])
+		weechat.command('','/mute -all notice -server %s %s %s' % (servername, info['nick'], msg))
+	return ''
 
 def ircrypt_decrypt_hook(data, msgtype, servername, args):
 	'''Hook for incomming PRVMSG commands.
@@ -1015,6 +1032,7 @@ def ircrypt_config_init():
 def ircrypt_config_reload_cb(data, config_file):
 	'''Handle a reload of the configuration file.
 	'''
+	ircrypt_init()
 	return weechat.WEECHAT_CONFIG_READ_OK
 
 
@@ -1337,6 +1355,15 @@ def ircrypt_command_verify_keys(server, nick):
 	# No matching keys
 	return weechat.WEECHAT_RC_OK
 
+def ircrypt_command_request_key(server, nick):
+	'''This function ist called when the user requests a key from another
+	user'''
+	weechat.command('','/mute -all notice -server %s %s >KCRY-REQUEST' \
+			% (server, nick))
+	# Print message in ircrypt buffer, that request was declined
+	weechat.prnt('', 'Request public gpg-key from user %s on server %s' % \
+			(nick, server))
+	return weechat.WEECHAT_RC_OK
 
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. This method is also used for
@@ -1348,7 +1375,7 @@ def ircrypt_command(data, buffer, args):
 
 	if argv and not argv[0] in ['list', 'buffer', 'set-key', 'remove-key',
 			'set-gpg-id', 'remove-gpg-id', 'set-cipher', 'remove-cipher',
-			'exchange', 'verify-requests', 'verify-keys', 'plain']:
+			'exchange', 'verify-requests', 'verify-keys', 'plain', 'request-key']:
 		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
 				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
@@ -1414,6 +1441,12 @@ def ircrypt_command(data, buffer, args):
 		return weechat.WEECHAT_RC_ERROR
 
 	target = '%s/%s' % (server_name, argv[1])
+
+	# Request gpg-key from another user
+	if argv[0] == 'request-key':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_request_key(server_name, argv[1])
 
 	# Ask for a key
 	if argv[0] == 'exchange':
@@ -1501,6 +1534,9 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 	if '>2CRY-' in args:
 		return ircrypt_keyex_receive_key(servername, args, info)
 
+	if '>KCRY-REQUEST' in args:
+		return ircrypt_public_key_send(servername, args, info)
+
 	return args
 
 
@@ -1549,7 +1585,7 @@ def ircrypt_check_binary():
 
 
 def ircrypt_init():
-	global ircrypt_gpg_homedir
+	global ircrypt_gpg_homedir, ircrypt_gpg_id
 	ircrypt_gpg_homedir = '%s/ircrypt' % weechat.info_get("weechat_dir", "")
 	oldmask = os.umask(077)
 	try:
@@ -1559,14 +1595,20 @@ def ircrypt_init():
 	os.umask(oldmask)
 
 	# Probe for GPG key
-	p = subprocess.Popen([ircrypt_gpg_binary, '--sign', '--homedir',
-			ircrypt_gpg_homedir, '--batch', '--no-tty'],
-			stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE)
-	p.communicate(' ')
-	if not p.returncode:
-		# There is a gpg key
-		return
+	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
+		'--batch', '--no-tty', '--quiet', '--list-secret-keys', '--with-colon'],
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	(out, err) = p.communicate()
+
+
+	# There is a secret key
+	if out:
+		try:
+			ircrypt_gpg_id = out.split(':')[4]
+		except:
+			weechat.prnt('', 'Unable to get key id')
+		weechat.prnt('', 'private gpg key with id %s' % ircrypt_gpg_id)
+		return weechat.WEECHAT_RC_OK
 
 	# Try to generate a key
 	weechat.prnt('','Try to generate a key')
@@ -1589,14 +1631,14 @@ def ircrypt_init():
 
 	weechat.hook_set(hook, 'stdin', gen_command)
 	weechat.hook_set(hook, 'stdin_close', '')
-
+	return weechat.WEECHAT_RC_OK
 
 def ircrypt_key_generated_cb(data, command, returncode, out, err):
-	if return_code:
+	if returncode:
 		weechat.prnt('','Could not generate key')
+		return weechat.WEECHAT_RC_OK
 	else:
-		weechat.prnt('','Key generated')
-	return weechat.WEECHAT_RC_OK
+		return ircrypt_init()
 
 
 # register plugin
