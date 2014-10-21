@@ -683,7 +683,7 @@ def ircrypt_public_key_get(servername, args, info):
 		ircrypt_keys_buffer[buf_key].update(int(number), message)
 		return ''
 	else:
-		target = ('%s/%s' % (servername, info['channel'])).lower()
+		target = ('%s/%s' % (servername, info['nick'])).lower()
 		# check asymmetric key id
 		key_id = ircrypt_asym_id.get(target)
 		if key_id:
@@ -1229,31 +1229,6 @@ def ircrypt_command_remove_keys(target):
 	return weechat.WEECHAT_RC_OK
 
 
-def ircrypt_command_set_pub(target, pub):
-	'''ircrypt command to set asymmetric identifier for target (target is a server/channel combination)'''
-	global ircrypt_asym_id
-	# Set asymmetric identifier
-	ircrypt_asym_id[target.lower()] = pub
-	# Print status message in current buffer
-	weechat.prnt(weechat.current_buffer(), 'Set asymmetric identifier for %s' % target)
-	return weechat.WEECHAT_RC_OK
-
-
-def ircrypt_command_remove_pub(target):
-	'''ircrypt command to remove asymmetric identifier for target (target is a server/channel combination)'''
-	global ircrypt_asym_id
-	# Get buffer
-	buffer = weechat.current_buffer()
-	# Check if asymmetric identifier is set and print error in current buffer otherwise
-	if target.lower() not in ircrypt_asym_id:
-		weechat.prnt(buffer, 'No existing asymmetric identifier for %s.' % target)
-		return weechat.WEECHAT_RC_OK
-	# Delete asymmetric identifier and print status message in current buffer
-	del ircrypt_asym_id[target.lower()]
-	weechat.prnt(buffer, 'Removed asymmetric identifier for %s' % target)
-	return weechat.WEECHAT_RC_OK
-
-
 def ircrypt_command_set_cip(target, cipher):
 	'''ircrypt command to set key for target (target is a server/channel combination)'''
 	global ircrypt_cipher
@@ -1407,7 +1382,7 @@ def ircrypt_command_verify_keys(server, nick):
 	# No matching keys
 	return weechat.WEECHAT_RC_OK
 
-def ircrypt_command_request_key(server, nick):
+def ircrypt_command_request_public_key(server, nick):
 	'''This function ist called when the user requests a key from another
 	user'''
 	weechat.command('','/mute -all notice -server %s %s >KEY-REQUEST' \
@@ -1416,6 +1391,28 @@ def ircrypt_command_request_key(server, nick):
 	weechat.prnt('', 'Request public gpg-key from user %s on server %s' % \
 			(nick, server))
 	return weechat.WEECHAT_RC_OK
+
+def ircrypt_command_remove_public_key(target):
+	'''ircrypt command to remove public key for target (target is a server/channel combination)'''
+	global ircrypt_asym_id
+	# Get buffer
+	buffer = weechat.current_buffer()
+	# Check if public key is set and print error in current buffer otherwise
+	if target.lower() not in ircrypt_asym_id:
+		weechat.prnt(buffer, 'No existing public key for %s.' % target)
+		return weechat.WEECHAT_RC_OK
+	# Delete public key (first in gpg then in config file) and print status message in current buffer
+	p = subprocess.Popen([ircrypt_gpg_binary, '--batch', '--yes', '--no-tty',
+		'--quiet', '--homedir', ircrypt_gpg_homedir,'--delete-key',
+		ircrypt_asym_id[target.lower()]], stdin=subprocess.PIPE,
+		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	(out, err) = p.communicate()
+	if p.returncode:
+		weechat.prnt(buffer, 'Could not delete public key in gpg')
+	del ircrypt_asym_id[target.lower()]
+	weechat.prnt(buffer, 'Removed asymmetric identifier for %s' % target)
+	return weechat.WEECHAT_RC_OK
+
 
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command. This method is also used for
@@ -1426,8 +1423,8 @@ def ircrypt_command(data, buffer, args):
 	argv = [a for a in args.split(' ') if a]
 
 	if argv and not argv[0] in ['list', 'buffer', 'set-key', 'remove-key',
-			'set-gpg-id', 'remove-gpg-id', 'set-cipher', 'remove-cipher',
-			'exchange', 'verify-requests', 'verify-keys', 'plain', 'request-key']:
+			'remove-public-key', 'set-cipher', 'remove-cipher', 'exchange',
+			'verify-requests', 'verify-keys', 'plain', 'request-public-key']:
 		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
 				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
@@ -1494,12 +1491,6 @@ def ircrypt_command(data, buffer, args):
 
 	target = '%s/%s' % (server_name, argv[1])
 
-	# Request gpg-key from another user
-	if argv[0] == 'request-key':
-		if len(argv) != 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_request_key(server_name, argv[1])
-
 	# Ask for a key
 	if argv[0] == 'exchange':
 		if len(argv) == 2:
@@ -1520,17 +1511,17 @@ def ircrypt_command(data, buffer, args):
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_keys(target)
 
-	# Set asymmetric ids
-	if argv[0] == 'set-gpg-id':
-		if len(argv) < 3:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_set_pub(target, ' '.join(argv[2:]))
-
-	# Remove asymmetric ids
-	if argv[0] == 'remove-gpg-id':
+	# Request public key from another user
+	if argv[0] == 'request-public-key':
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_remove_pub(target)
+		return ircrypt_command_request_public_key(server_name, argv[1])
+
+	# Remove public key from another user
+	if argv[0] == 'remove-public-key':
+		if len(argv) != 2:
+			return weechat.WEECHAT_RC_ERROR
+		return ircrypt_command_remove_public_key(target)
 
 	# Set special cipher for channel
 	if argv[0] == 'set-cipher':
@@ -1709,8 +1700,8 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| buffer '
 			'| set-key [-server <server>] <target> <key> '
 			'| remove-key [-server <server>] <target> '
-			'| set-gpg-id [-server <server>] <nick> <id> '
-			'| remove-gpg-id [-server <server>] <nick> '
+			'| request-public-key [-server <server>] <nick>'
+			'| remove-public-key [-server <server>] <nick> '
 			'| set-cipher [-server <server>] <target> <cipher> '
 			'| remove-cipher [-server <server>] <target> '
 			'| exchange [-server <server>] <nick> [<target>] '
@@ -1723,8 +1714,8 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| verify-requests %(nicks)|-server %(irc_servers) %- '
 			'|| verify-keys %(nicks)|-server %(irc_servers) %- '
-			'|| set-gpg-id %(nicks)|-server %(irc_servers) %- '
-			'|| remove-gpg-id %(nicks)|-server %(irc_servers) %- '
+			'|| request-public-key %(nicks)|-server %(irc_servers) %- '
+			'|| remove-public-key %(nicks)|-server %(irc_servers) %- '
 			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
 			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
 			'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
