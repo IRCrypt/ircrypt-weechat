@@ -650,12 +650,66 @@ def ircrypt_public_key_send(servername, args, info):
 			ircrypt_gpg_id], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE)
 		(key, err) = p.communicate()
+
+		if err:
+			weechat.prnt('', err)
+
 		key = base64.b64encode(key)
 
 	for i in range(1 + (len(key) / 400))[::-1]:
 		msg = '>KCRY-%i %s' % (i, key[i*400:(i+1)*400])
 		weechat.command('','/mute -all notice -server %s %s %s' % (servername, info['nick'], msg))
 	return ''
+
+
+def ircrypt_public_key_get(servername, args, info):
+	global ircrypt_keys_buffer, ircrypt_asym_id
+
+	# Get prefix, number and message
+	pre, message    = args.split('>KCRY-', 1)
+	number, message = message.split(' ', 1)
+
+	# Get key for the request buffer
+	buf_key = (servername, info['channel'], info['nick'])
+
+	# Check if we got the last part of the message otherwise put the message
+	# into a global buffer and quit
+	if int(number):
+		if not buf_key in ircrypt_keys_buffer:
+			# - First element is list of requests
+			# - Second element is currently received request
+			ircrypt_keys_buffer[buf_key] = MessageParts()
+		# Add parts to current request
+		ircrypt_keys_buffer[buf_key].update(int(number), message)
+		return ''
+	else:
+		target = ('%s/%s' % (servername, info['channel'])).lower()
+		# check asymmetric key id
+		key_id = ircrypt_asym_id.get(target)
+		if key_id:
+			weechat.prnt('', 'WARNING There exist a gpg key for this user. Nothing changed')
+			return ''
+
+		p = subprocess.Popen([ircrypt_gpg_binary, '--no-tty',
+			'--homedir', ircrypt_gpg_homedir, '--keyid-format', '0xlong',
+			'--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE)
+		(out, err) = p.communicate(base64.b64decode(message +
+			ircrypt_keys_buffer[buf_key].message))
+
+		weechat.prnt('', err)
+
+		try:
+			gpg_id = err.split('0x',1)[1].split(':',1)[0]
+		except:
+			weechat.prnt('', 'Unable to get key id')
+			return ''
+
+		# Set asymmetric identifier
+		ircrypt_asym_id[target.lower()] = gpg_id
+		# Print status message in current buffer
+		weechat.prnt('', 'Set gpg key for %s' % target)
+		return ''
 
 def ircrypt_decrypt_hook(data, msgtype, servername, args):
 	'''Hook for incomming PRVMSG commands.
@@ -818,7 +872,6 @@ def ircrypt_decrypt_asym(servername, args, info):
 	return '%s%s' % (pre, decrypted)
 
 
-
 def ircrypt_encrypt_hook(data, msgtype, servername, args):
 	'''Hook for outgoing PRVMSG commands.
 	This method will call the appropriate methods for encrypting the outgoing
@@ -904,7 +957,6 @@ def ircrypt_encrypt_sym(servername, args, info, key):
 		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[MAX_PART_LEN:],
 				output[:MAX_PART_LEN])
 	return output
-
 
 
 def ircrypt_encrypt_asym(servername, args, info, key_id):
@@ -1358,7 +1410,7 @@ def ircrypt_command_verify_keys(server, nick):
 def ircrypt_command_request_key(server, nick):
 	'''This function ist called when the user requests a key from another
 	user'''
-	weechat.command('','/mute -all notice -server %s %s >KCRY-REQUEST' \
+	weechat.command('','/mute -all notice -server %s %s >KEY-REQUEST' \
 			% (server, nick))
 	# Print message in ircrypt buffer, that request was declined
 	weechat.prnt('', 'Request public gpg-key from user %s on server %s' % \
@@ -1534,8 +1586,11 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 	if '>2CRY-' in args:
 		return ircrypt_keyex_receive_key(servername, args, info)
 
-	if '>KCRY-REQUEST' in args:
+	if '>KEY-REQUEST' in args:
 		return ircrypt_public_key_send(servername, args, info)
+
+	if '>KCRY-' in args:
+		return ircrypt_public_key_get(servername, args, info)
 
 	return args
 
