@@ -1618,7 +1618,9 @@ def ircrypt_check_binary():
 
 def ircrypt_init():
 	global ircrypt_gpg_homedir, ircrypt_gpg_id
+	# This should usually be ~/.weechat/ircrypt
 	ircrypt_gpg_homedir = '%s/ircrypt' % weechat.info_get("weechat_dir", "")
+	# make sure only the current user has access
 	oldmask = os.umask(077)
 	try:
 		os.mkdir(ircrypt_gpg_homedir)
@@ -1637,13 +1639,22 @@ def ircrypt_init():
 	if out:
 		try:
 			ircrypt_gpg_id = out.split(':')[4]
+			weechat.prnt('', 'IRCrypt: Found private gpg key with id %s' % ircrypt_gpg_id)
+			return weechat.WEECHAT_RC_OK
 		except:
-			weechat.prnt('', 'Unable to get key id')
-		weechat.prnt('', 'private gpg key with id %s' % ircrypt_gpg_id)
-		return weechat.WEECHAT_RC_OK
+			weechat.prnt('', '%sIRCrypt: Unable to get key id', weechat.prefix('error'))
 
 	# Try to generate a key
-	weechat.prnt('','Try to generate a key')
+	weechat.prnt('', '%sIRCrypt Notice:%s' % \
+			(weechat.color('bold'), weechat.color('-bold')))
+	weechat.prnt('', 'No private key for assymetric encryption was found in the '
+			+ 'IRCrypt GPG keyring. IRCrypt will now try to automatically generate a '
+			+ 'new key. This might take quite some time as this procedure depends on '
+			+ 'the gathering of enough entropy for generating cryptographically '
+			+ 'strong random numbers. You cannot use the asymmetric encryption '
+			+ '(private chat encryption) until this process is done. However, it does '
+			+ 'not affect the symmetric encryption which can already be used. You '
+			+ 'will be notified once the process is done.')
 	hook = weechat.hook_process_hashtable(ircrypt_gpg_binary, {
 		'stdin': '1',
 		'arg1': '--batch',
@@ -1665,12 +1676,17 @@ def ircrypt_init():
 	weechat.hook_set(hook, 'stdin_close', '')
 	return weechat.WEECHAT_RC_OK
 
-def ircrypt_key_generated_cb(data, command, returncode, out, err):
-	if returncode:
-		weechat.prnt('','Could not generate key')
+def ircrypt_key_generated_cb(data, command, errorcode, out, err):
+	if errorcode:
+		weechat.prnt('','%sIRCrypt: Could not generate key' % \
+				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
-	else:
-		return ircrypt_init()
+
+	weechat.prnt('', '%sIRCrypt Notice:%s' % \
+			(weechat.color('bold'), weechat.color('-bold')))
+	weechat.prnt('', 'A private key for assymetric encryption was successfully'
+			+ 'generated and can now be used for communication.')
+	return ircrypt_init()
 
 
 # register plugin
