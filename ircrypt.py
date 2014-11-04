@@ -274,6 +274,7 @@ def ircrypt_query_pong(servername, args, info):
 	if fingerprint and fingerprint != ircrypt_gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
 				% (servername, info['nick']))
+		return ''
 	target = '%s%s' % (servername, info['nick'])
 	gpg_id = ircrypt_asym_id.get(target.lower())
 	if gpg_id:
