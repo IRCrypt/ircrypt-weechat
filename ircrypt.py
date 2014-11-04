@@ -266,6 +266,26 @@ def ircrypt_public_key_get(servername, args, info):
 		weechat.prnt('', 'Set gpg key for %s' % target)
 		return ''
 
+
+def ircrypt_query_pong(servername, args, info):
+	global ircrypt_gpg_id
+	fingerprint = args.split('>KEY-EX-PING')[-1].lstrip(' ')
+	if fingerprint == ircrypt_gpg_id:
+		target = '%s%s' % (servername, info['nick'])
+		gpg_id = ircrypt_asym_id.get(target.lower())
+		if gpg_id:
+			weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG %s' \
+					% (servername, info['nick'], gpg_id))
+		else:
+			weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG' \
+					% (servername, info['nick']))
+	else:
+		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
+				% (servername, info['nick']))
+	return ''
+
+
+
 def ircrypt_decrypt_hook(data, msgtype, servername, args):
 	'''Hook for incomming PRVMSG commands.
 	This method will parse the input, check if it is an encrypted message and
@@ -804,6 +824,23 @@ def ircrypt_command_remove_cip(target):
 	return weechat.WEECHAT_RC_OK
 
 
+def ircrypt_command_query(server, nick):
+	'''This function ist called when the user starts a key exchange'''
+	global ircrypt_asym_id
+	target = '%s%s' % (server, nick)
+	gpg_id = ircrypt_asym_id.get(target.lower())
+	if gpg_id:
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s' \
+				% (server, nick, gpg_id))
+	else:
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING' \
+				% (server, nick))
+	weechat.command('','/query -server %s %s' % (server, nick))
+	weechat.prnt(weechat.current_buffer(), 'Start key exchange with %s on server %s' % \
+			(nick, server))
+	return weechat.WEECHAT_RC_OK
+
+
 def ircrypt_command_request_public_key(server, nick):
 	'''This function ist called when the user requests a key from another
 	user'''
@@ -813,6 +850,7 @@ def ircrypt_command_request_public_key(server, nick):
 	weechat.prnt('', 'Request public gpg-key from user %s on server %s' % \
 			(nick, server))
 	return weechat.WEECHAT_RC_OK
+
 
 def ircrypt_command_remove_public_key(target):
 	'''ircrypt command to remove public key for target (target is a server/channel combination)'''
@@ -846,7 +884,7 @@ def ircrypt_command(data, buffer, args):
 
 	if argv and not argv[0] in ['list', 'buffer', 'set-key', 'remove-key',
 			'remove-public-key', 'set-cipher', 'remove-cipher', 'exchange',
-			'verify-requests', 'verify-keys', 'plain', 'request-public-key']:
+			'plain', 'request-public-key', 'query']:
 		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
 				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
@@ -854,11 +892,6 @@ def ircrypt_command(data, buffer, args):
 	# list
 	if not argv or argv == ['list']:
 		return ircrypt_command_list()
-
-	# buffer, create ircrypt buffer
-	if argv == ['buffer']:
-		ircrypt_get_buffer(ALWAYS)
-		return weechat.WEECHAT_RC_OK
 
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
@@ -869,20 +902,6 @@ def ircrypt_command(data, buffer, args):
 	else:
 		# Try to determine the server automatically
 		server_name = weechat.buffer_get_string(buffer, 'localvar_server')
-
-	# Verify (check signature) of pending requests requests for key exchange
-	if argv[0] == 'verify-requests':
-		if len(argv) > 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_verify_requests(server_name,
-				argv[1] if len(argv) == 2 else '')
-
-	# Verify (check signature) of sent keys
-	if argv[0] == 'verify-keys':
-		if len(argv) > 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_verify_keys(server_name,
-				argv[1] if len(argv) == 2 else '')
 
 	# All remaining commands need a server name
 	if not server_name:
@@ -913,12 +932,9 @@ def ircrypt_command(data, buffer, args):
 
 	target = '%s/%s' % (server_name, argv[1])
 
-	# Ask for a key
-	if argv[0] == 'exchange':
+	if argv[0] == 'query':
 		if len(argv) == 2:
-			return ircrypt_keyex_askkey(argv[1], None, server_name)
-		if len(argv) == 3:
-			return ircrypt_keyex_askkey(argv[1], argv[2], server_name)
+			return ircrypt_command_query(server_name, argv[1])
 		return weechat.WEECHAT_RC_ERROR
 
 	# Set keys
@@ -992,12 +1008,8 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 		# TODO: Add error handler
 		return args
 
-	# Incomming key request.
-	if '>WCRY-' in args:
-		return ircrypt_keyex_get_request(servername, args, info)
-
-	if '>2CRY-' in args:
-		return ircrypt_keyex_receive_key(servername, args, info)
+	if '>KEY-EX-PING' in args:
+		return ircrypt_query_pong(servername, args, info)
 
 	if '>KEY-REQUEST' in args:
 		return ircrypt_public_key_send(servername, args, info)
@@ -1057,15 +1069,16 @@ def ircrypt_init():
 
 	# Probe for GPG key
 	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
-		'--batch', '--no-tty', '--quiet', '--list-secret-keys', '--with-colon'],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		'--batch', '--no-tty', '--quiet', '--list-secret-keys',
+		'--with-fingerprint', '--with-colon'], stdin=subprocess.PIPE,
+		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	(out, err) = p.communicate()
 
 
 	# There is a secret key
 	if out:
 		try:
-			ircrypt_gpg_id = out.split(':')[4]
+			ircrypt_gpg_id = out.split('fpr')[-1].split('\n')[0].strip(':')
 			weechat.prnt('', 'IRCrypt: Found private gpg key with id %s' % ircrypt_gpg_id)
 			return weechat.WEECHAT_RC_OK
 		except:
