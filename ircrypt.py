@@ -260,6 +260,18 @@ def ircrypt_public_key_get(servername, args, info):
 			weechat.prnt('', 'Unable to get key id')
 			return ''
 
+		# Probe for GPG fingerprint
+		p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
+			'--batch', '--no-tty', '--quiet', '--fingerprint', '--with-colon'],
+			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		(out, err) = p.communicate()
+
+		# There is a secret key
+		if out:
+			out = [ line for line in out.split('\n') \
+					if (gpg_id + ':') in line and line.startswith('fpr:') ][-1]
+			gpg_id = out.split('fpr')[-1].strip(':')
+
 		# Set asymmetric identifier
 		ircrypt_asym_id[target.lower()] = gpg_id
 		# Print status message in current buffer
