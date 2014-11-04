@@ -276,7 +276,25 @@ def ircrypt_public_key_get(servername, args, info):
 		ircrypt_asym_id[target.lower()] = gpg_id
 		# Print status message in current buffer
 		weechat.prnt('', 'Set gpg key for %s' % target)
+		ircrypt_sym_ex(servername, info['nick'])
 		return ''
+
+
+def ircrypt_sym_ex(server, nick):
+	global ircrypt_asym_id
+	key = os.urandom(64)
+	target = '%s/%s' % (server, nick)
+	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
+		'--batch', '--no-tty', '--quiet', '-s', '--trust-model', 'always', '-e',
+		'-r', ircrypt_asym_id[target]], stdin=subprocess.PIPE,
+		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	(out, err) = p.communicate(key)
+	if err:
+		weechat.prnt('', err)
+	out = base64.b64encode(out)
+	for i in range(1 + (len(out) / 400))[::-1]:
+		msg = '>KEY-EX-%i %s' % (i, out[i*400:(i+1)*400])
+		weechat.command('','/mute -all notice -server %s %s %s' % (server, nick, msg))
 
 
 def ircrypt_query_pong(servername, args, info):
@@ -299,6 +317,20 @@ def ircrypt_query_pong(servername, args, info):
 		return ircrypt_public_key_send(servername, args, info)
 	return ''
 
+
+def ircrypt_pong_pong(servername, args, info):
+	global ircrypt_gpg_id
+	weechat.prnt('', args)
+	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
+	if fingerprint and fingerprint != ircrypt_gpg_id:
+		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
+				% (servername, info['nick']))
+		return ''
+	if fingerprint:
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-CONTINUE' \
+				% (servername, info['nick']))
+		return ''
+	return ircrypt_public_key_send(servername, args, info)
 
 
 def ircrypt_decrypt_hook(data, msgtype, servername, args):
@@ -1025,6 +1057,9 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 
 	if '>KEY-EX-PING' in args:
 		return ircrypt_query_pong(servername, args, info)
+
+	if '>KEY-EX-PONG' in args:
+		return ircrypt_pong_pong(servername, args, info)
 
 	if '>KEY-REQUEST' in args:
 		return ircrypt_public_key_send(servername, args, info)
