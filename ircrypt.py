@@ -269,19 +269,21 @@ def ircrypt_public_key_get(servername, args, info):
 
 def ircrypt_query_pong(servername, args, info):
 	global ircrypt_gpg_id
+	weechat.prnt('', args)
 	fingerprint = args.split('>KEY-EX-PING')[-1].lstrip(' ')
-	if fingerprint == ircrypt_gpg_id:
-		target = '%s%s' % (servername, info['nick'])
-		gpg_id = ircrypt_asym_id.get(target.lower())
-		if gpg_id:
-			weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG %s' \
-					% (servername, info['nick'], gpg_id))
-		else:
-			weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG' \
-					% (servername, info['nick']))
-	else:
+	if fingerprint and fingerprint != ircrypt_gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
 				% (servername, info['nick']))
+	target = '%s%s' % (servername, info['nick'])
+	gpg_id = ircrypt_asym_id.get(target.lower())
+	if gpg_id:
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG %s' \
+				% (servername, info['nick'], gpg_id))
+	else:
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG' \
+				% (servername, info['nick']))
+	if not fingerprint:
+		return ircrypt_public_key_send(servername, args, info)
 	return ''
 
 
@@ -827,7 +829,7 @@ def ircrypt_command_remove_cip(target):
 def ircrypt_command_query(server, nick):
 	'''This function ist called when the user starts a key exchange'''
 	global ircrypt_asym_id
-	target = '%s%s' % (server, nick)
+	target = '%s/%s' % (server, nick)
 	gpg_id = ircrypt_asym_id.get(target.lower())
 	if gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s' \
