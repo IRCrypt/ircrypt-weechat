@@ -61,8 +61,7 @@ SCRIPT_VERSION = 'SNAPSHOT'
 SCRIPT_LICENSE = 'FreeBSD License'
 SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
 
-import weechat, string, os, subprocess, base64
-import time
+import weechat, string, os, subprocess, base64, time
 
 
 # Global buffers used to store message parts, pending requests, configuration
@@ -299,7 +298,6 @@ def ircrypt_sym_ex(server, nick):
 
 def ircrypt_query_pong(server, args, info):
 	global ircrypt_gpg_id
-	weechat.prnt('', args)
 	fingerprint = args.split('>KEY-EX-PING')[-1].lstrip(' ')
 	if fingerprint and fingerprint != ircrypt_gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
@@ -320,7 +318,6 @@ def ircrypt_query_pong(server, args, info):
 
 def ircrypt_pong_pong(server, args, info):
 	global ircrypt_gpg_id
-	weechat.prnt('', args)
 	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
 	if fingerprint and fingerprint != ircrypt_gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
@@ -329,8 +326,18 @@ def ircrypt_pong_pong(server, args, info):
 	if fingerprint:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-CONTINUE' \
 				% (server, info['nick']))
+		ircrypt_sym_ex(server, info['nick'])
 		return ''
 	return ircrypt_public_key_send(server, args, info)
+
+
+def ircrypt_pong_pong_pong(server, args, info):
+	global ircrypt_gpg_id
+	target = '%s/%s' % (server, info['nick'])
+	gpg_id = ircrypt_asym_id.get(target.lower())
+	if gpg_id:
+		ircrypt_sym_ex(server, info['nick'])
+	return ''
 
 
 def ircrypt_decrypt_hook(data, msgtype, server, args):
@@ -1066,6 +1073,9 @@ def ircrypt_notice_hook(data, msgtype, server, args):
 
 	if '>KCRY-' in args:
 		return ircrypt_public_key_get(server, args, info)
+
+	if '>KEY-EX-CONTINUE' in args:
+		return ircrypt_pong_pong_pong(server, args, info)
 
 	return args
 
