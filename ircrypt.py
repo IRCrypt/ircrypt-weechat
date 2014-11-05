@@ -196,7 +196,7 @@ class MessageParts:
 		self.modified = time.time()
 
 
-def ircrypt_public_key_send(servername, args, info):
+def ircrypt_public_key_send(server, args, info):
 	global ircrypt_gpg_homedir, ircrypt_gpg_id
 
 	if ircrypt_gpg_id:
@@ -213,11 +213,11 @@ def ircrypt_public_key_send(servername, args, info):
 
 	for i in range(1 + (len(key) / 400))[::-1]:
 		msg = '>KCRY-%i %s' % (i, key[i*400:(i+1)*400])
-		weechat.command('','/mute -all notice -server %s %s %s' % (servername, info['nick'], msg))
+		weechat.command('','/mute -all notice -server %s %s %s' % (server, info['nick'], msg))
 	return ''
 
 
-def ircrypt_public_key_get(servername, args, info):
+def ircrypt_public_key_get(server, args, info):
 	global ircrypt_keys_buffer, ircrypt_asym_id
 
 	# Get prefix, number and message
@@ -225,7 +225,7 @@ def ircrypt_public_key_get(servername, args, info):
 	number, message = message.split(' ', 1)
 
 	# Get key for the request buffer
-	buf_key = (servername, info['channel'], info['nick'])
+	buf_key = (server, info['channel'], info['nick'])
 
 	# Check if we got the last part of the message otherwise put the message
 	# into a global buffer and quit
@@ -238,7 +238,7 @@ def ircrypt_public_key_get(servername, args, info):
 		ircrypt_keys_buffer[buf_key].update(int(number), message)
 		return ''
 	else:
-		target = ('%s/%s' % (servername, info['nick'])).lower()
+		target = ('%s/%s' % (server, info['nick'])).lower()
 		# check asymmetric key id
 		key_id = ircrypt_asym_id.get(target)
 		if key_id:
@@ -276,7 +276,7 @@ def ircrypt_public_key_get(servername, args, info):
 		ircrypt_asym_id[target.lower()] = gpg_id
 		# Print status message in current buffer
 		weechat.prnt('', 'Set gpg key for %s' % target)
-		ircrypt_sym_ex(servername, info['nick'])
+		ircrypt_sym_ex(server, info['nick'])
 		return ''
 
 
@@ -297,50 +297,50 @@ def ircrypt_sym_ex(server, nick):
 		weechat.command('','/mute -all notice -server %s %s %s' % (server, nick, msg))
 
 
-def ircrypt_query_pong(servername, args, info):
+def ircrypt_query_pong(server, args, info):
 	global ircrypt_gpg_id
 	weechat.prnt('', args)
 	fingerprint = args.split('>KEY-EX-PING')[-1].lstrip(' ')
 	if fingerprint and fingerprint != ircrypt_gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
-				% (servername, info['nick']))
+				% (server, info['nick']))
 		return ''
-	target = '%s/%s' % (servername, info['nick'])
+	target = '%s/%s' % (server, info['nick'])
 	gpg_id = ircrypt_asym_id.get(target.lower())
 	if gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG %s' \
-				% (servername, info['nick'], gpg_id))
+				% (server, info['nick'], gpg_id))
 	else:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG' \
-				% (servername, info['nick']))
+				% (server, info['nick']))
 	if not fingerprint:
-		return ircrypt_public_key_send(servername, args, info)
+		return ircrypt_public_key_send(server, args, info)
 	return ''
 
 
-def ircrypt_pong_pong(servername, args, info):
+def ircrypt_pong_pong(server, args, info):
 	global ircrypt_gpg_id
 	weechat.prnt('', args)
 	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
 	if fingerprint and fingerprint != ircrypt_gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PING-WITH-INVALID-FINGERPRINT' \
-				% (servername, info['nick']))
+				% (server, info['nick']))
 		return ''
 	if fingerprint:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-CONTINUE' \
-				% (servername, info['nick']))
+				% (server, info['nick']))
 		return ''
-	return ircrypt_public_key_send(servername, args, info)
+	return ircrypt_public_key_send(server, args, info)
 
 
-def ircrypt_decrypt_hook(data, msgtype, servername, args):
+def ircrypt_decrypt_hook(data, msgtype, server, args):
 	'''Hook for incomming PRVMSG commands.
 	This method will parse the input, check if it is an encrypted message and
 	call the appropriate decryption methods if necessary.
 
 	:param data:
 	:param msgtype:
-	:param servername: IRC server the message comes from.
+	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
 	global ircrypt_config_option, ircrypt_keys, ircrypt_asym_id
@@ -349,18 +349,18 @@ def ircrypt_decrypt_hook(data, msgtype, servername, args):
 
 	# asymmetric encryption
 	if '>ACRY-' in args:
-		return ircrypt_decrypt_asym(servername, args, info)
+		return ircrypt_decrypt_asym(server, args, info)
 
 	# Check if channel is own nick and if change channel to nick of sender
 	if info['channel'][0] not in '#&':
 		info['channel'] = info['nick']
 
 	# Get key
-	key = ircrypt_keys.get(('%s/%s' % (servername, info['channel'])).lower())
+	key = ircrypt_keys.get(('%s/%s' % (server, info['channel'])).lower())
 	if key:
 		# if key exists and >CRY part of message start symmetric encryption
 		if '>CRY-' in args:
-			return ircrypt_decrypt_sym(servername, args, info, key)
+			return ircrypt_decrypt_sym(server, args, info, key)
 		# if key exisits and no >CRY not part of message flag message as unencrypted
 		else:
 			pre, message = string.split(args, ' :', 1)
@@ -372,11 +372,11 @@ def ircrypt_decrypt_hook(data, msgtype, servername, args):
 	return args
 
 
-def ircrypt_decrypt_sym(servername, args, info, key):
+def ircrypt_decrypt_sym(server, args, info, key):
 	'''This method is called to decrypt an symmetric encrypted messages and put
 	them together again if necessary.
 
-	:param servername: IRC server the message comes from.
+	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	:param info: dictionary created by info_get_hashtable
 	:param key: key for decryption
@@ -387,7 +387,7 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	number, message = string.split(message, ' ', 1 )
 
 	# Get key for the message buffer
-	buf_key = '%s.%s.%s' % (servername, info['channel'], info['nick'])
+	buf_key = '%s.%s.%s' % (server, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
 	# otherwise put the message into a globa buffer and quit
@@ -404,7 +404,7 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 		pass
 
 	# Get message buffer in case we need to print an error
-	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+	buf = weechat.buffer_search('irc', '%s.%s' % (server,info['channel']))
 
 	# Decode base64 encoded message
 	try:
@@ -437,11 +437,11 @@ def ircrypt_decrypt_sym(servername, args, info, key):
 	return '%s%s' % (pre, decrypted)
 
 
-def ircrypt_decrypt_asym(servername, args, info):
+def ircrypt_decrypt_asym(server, args, info):
 	'''This method is called to decrypt an asymmetric encrypted messages and put
 	them together again if necessary.
 
-	:param servername: IRC server the message comes from.
+	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	:param info: dictionary created by info_get_hashtable
 	'''
@@ -452,7 +452,7 @@ def ircrypt_decrypt_asym(servername, args, info):
 	number, message = string.split(message, ' ', 1 )
 
 	# Get key for the message buffer
-	buf_key = '%s.%s.%s' % (servername, info['channel'], info['nick'])
+	buf_key = '%s.%s.%s' % (server, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
 	# otherwise put the message into a globa buffer and quit
@@ -469,7 +469,7 @@ def ircrypt_decrypt_asym(servername, args, info):
 		pass
 
 	# Get message buffer in case we need to print an error
-	buf = weechat.buffer_search('irc', '%s.%s' % (servername,info['channel']))
+	buf = weechat.buffer_search('irc', '%s.%s' % (server,info['channel']))
 
 	# Decrypt
 	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty',
@@ -494,23 +494,23 @@ def ircrypt_decrypt_asym(servername, args, info):
 	return '%s%s' % (pre, decrypted)
 
 
-def ircrypt_encrypt_hook(data, msgtype, servername, args):
+def ircrypt_encrypt_hook(data, msgtype, server, args):
 	'''Hook for outgoing PRVMSG commands.
 	This method will call the appropriate methods for encrypting the outgoing
 	messages either symmetric or asymmetric
 
 	:param data:
 	:param msgtype:
-	:param servername: IRC server the message comes from.
+	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
 	global ircrypt_keys, ircrypt_asym_id
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
 
 	# check if this message is to be send as plain text
-	plain = ircrypt_message_plain.get('%s/%s' % (servername, info['channel']))
+	plain = ircrypt_message_plain.get('%s/%s' % (server, info['channel']))
 	if plain:
-		del ircrypt_message_plain['%s/%s' % (servername, info['channel'])]
+		del ircrypt_message_plain['%s/%s' % (server, info['channel'])]
 		if (plain[0] - time.time()) < 5 \
 				and args == 'PRIVMSG %s :%s' % (info['channel'], plain[1]):
 			args = args.replace('PRIVMSG %s :%s ' % (
@@ -520,25 +520,25 @@ def ircrypt_encrypt_hook(data, msgtype, servername, args):
 			return args
 
 	# check symmetric key
-	key = ircrypt_keys.get(('%s/%s' % (servername, info['channel'])).lower())
+	key = ircrypt_keys.get(('%s/%s' % (server, info['channel'])).lower())
 	if key:
-		return ircrypt_encrypt_sym(servername, args, info, key)
+		return ircrypt_encrypt_sym(server, args, info, key)
 
 	# check asymmetric key id
-	key_id = ircrypt_asym_id.get(('%s/%s' % (servername, info['channel'])).lower())
+	key_id = ircrypt_asym_id.get(('%s/%s' % (server, info['channel'])).lower())
 	if key_id and weechat.config_boolean(
 				weechat.config_get('ircrypt.cipher.asym_enabled')):
-		return ircrypt_encrypt_asym(servername, args, info, key_id)
+		return ircrypt_encrypt_asym(server, args, info, key_id)
 
 	# No key -> don't encrypt
 	return args
 
 
-def ircrypt_encrypt_sym(servername, args, info, key):
+def ircrypt_encrypt_sym(server, args, info, key):
 	'''This method will symmetric encrypt messages and if necessary (if
 	they grow to large) split them into multiple parts.
 
-	:param servername: IRC server the message comes from.
+	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	:param info: dictionary created by info_get_hashtable
 	:param key: key for decryption
@@ -547,7 +547,7 @@ def ircrypt_encrypt_sym(servername, args, info, key):
 	global ircrypt_cipher
 
 	# Get cipher
-	cipher = ircrypt_cipher.get(('%s/%s' % (servername, info['channel'])).lower(),
+	cipher = ircrypt_cipher.get(('%s/%s' % (server, info['channel'])).lower(),
 			weechat.config_string(ircrypt_config_option['sym_cipher']))
 	# Get prefix and message
 	pre, message = string.split(args, ':', 1)
@@ -568,7 +568,7 @@ def ircrypt_encrypt_sym(servername, args, info, key):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
+		buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	#create output
@@ -581,11 +581,11 @@ def ircrypt_encrypt_sym(servername, args, info, key):
 	return output
 
 
-def ircrypt_encrypt_asym(servername, args, info, key_id):
+def ircrypt_encrypt_asym(server, args, info, key_id):
 	'''This method will asymmetric encrypt messages and if necessary (if
 	they grow to large) split them into multiple parts.
 
-	:param servername: IRC server the message comes from.
+	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	:param info: dictionary created by info_get_hashtable
 	:param key_id : key_id
@@ -607,7 +607,7 @@ def ircrypt_encrypt_asym(servername, args, info, key_id):
 	err = p.stderr.read()
 	p.stderr.close()
 	if err:
-		buf = weechat.buffer_search('irc', '%s.%s' % (servername, info['channel']))
+		buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
 	# Send encrypted message in MAX_PART_LEN sized blocks
@@ -942,16 +942,16 @@ def ircrypt_command(data, buffer, args):
 
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
-		server_name = argv[2]
+		server = argv[2]
 		del argv[2]
 		del argv[1]
 		args = args.split(' ', 2)[-1]
 	else:
 		# Try to determine the server automatically
-		server_name = weechat.buffer_get_string(buffer, 'localvar_server')
+		server = weechat.buffer_get_string(buffer, 'localvar_server')
 
 	# All remaining commands need a server name
-	if not server_name:
+	if not server:
 		# if no server was set print message in ircrypt buffer and throw error
 		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
 		return weechat.WEECHAT_RC_ERROR
@@ -968,20 +968,20 @@ def ircrypt_command(data, buffer, args):
 			channel = weechat.buffer_get_string(buffer, 'localvar_channel')
 		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
 		msg = marker + ' ' + args.split(' ', 1)[-1]
-		ircrypt_message_plain['%s/%s' % (server_name, channel)] = (time.time(), msg)
+		ircrypt_message_plain['%s/%s' % (server, channel)] = (time.time(), msg)
 		weechat.command('','/msg -server %s %s %s' % \
-				(server_name, channel, msg))
+				(server, channel, msg))
 		return weechat.WEECHAT_RC_OK
 
 	# For the remaining commands we need at least one additional argument
 	if len(argv) < 2:
 		return weechat.WEECHAT_RC_ERROR
 
-	target = '%s/%s' % (server_name, argv[1])
+	target = '%s/%s' % (server, argv[1])
 
 	if argv[0] == 'query':
 		if len(argv) == 2:
-			return ircrypt_command_query(server_name, argv[1])
+			return ircrypt_command_query(server, argv[1])
 		return weechat.WEECHAT_RC_ERROR
 
 	# Set keys
@@ -1000,7 +1000,7 @@ def ircrypt_command(data, buffer, args):
 	if argv[0] == 'request-public-key':
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_request_public_key(server_name, argv[1])
+		return ircrypt_command_request_public_key(server, argv[1])
 
 	# Remove public key from another user
 	if argv[0] == 'remove-public-key':
@@ -1046,7 +1046,7 @@ def ircrypt_encryption_statusbar(*args):
 				weechat.config_string(ircrypt_config_option['sym_cipher'])))
 
 
-def ircrypt_notice_hook(data, msgtype, servername, args):
+def ircrypt_notice_hook(data, msgtype, server, args):
 
 	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
@@ -1056,16 +1056,16 @@ def ircrypt_notice_hook(data, msgtype, servername, args):
 		return args
 
 	if '>KEY-EX-PING' in args:
-		return ircrypt_query_pong(servername, args, info)
+		return ircrypt_query_pong(server, args, info)
 
 	if '>KEY-EX-PONG' in args:
-		return ircrypt_pong_pong(servername, args, info)
+		return ircrypt_pong_pong(server, args, info)
 
 	if '>KEY-REQUEST' in args:
-		return ircrypt_public_key_send(servername, args, info)
+		return ircrypt_public_key_send(server, args, info)
 
 	if '>KCRY-' in args:
-		return ircrypt_public_key_get(servername, args, info)
+		return ircrypt_public_key_get(server, args, info)
 
 	return args
 
