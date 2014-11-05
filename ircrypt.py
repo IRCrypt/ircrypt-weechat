@@ -557,16 +557,6 @@ def ircrypt_config_init():
 			ircrypt_config_file, ircrypt_config_section['cipher'],
 			'sym_cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
 			'TWOFISH', 'TWOFISH', 0, '', '', '', '', '', '')
-	ircrypt_config_option['asym_enabled'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['cipher'], 'asym_enabled',
-			'boolean', 'If asymmetric encryption is used for message encryption',
-			'', 0, 0,
-			'off', 'off', 0, '', '', '', '', '', '')
-	ircrypt_config_option['exchange_enabled'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['cipher'], 'exchange_enabled',
-			'boolean', 'If key exchange is enabled',
-			'', 0, 0,
-			'off', 'off', 0, '', '', '', '', '', '')
 
 	# general options
 	ircrypt_config_section['general'] = weechat.config_new_section(
