@@ -64,20 +64,16 @@ SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
 import weechat, string, os, subprocess, base64, time
 
 
-# Global buffers used to store message parts, pending requests, configuration
+# Global memory used to store message parts, pending requests, configuration
 # options, keys, etc.
-ircrypt_msg_buffer       = {}
+ircrypt_msg_memory       = {}
 ircrypt_config_file      = None
 ircrypt_config_section   = {}
 ircrypt_config_option    = {}
 ircrypt_keys             = {}
 ircrypt_asym_id          = {}
 ircrypt_cipher           = {}
-ircrypt_buffer           = None
-ircrypt_pending_requests = []
-ircrypt_request_buffer   = {}
-ircrypt_pending_keys     = []
-ircrypt_keys_buffer      = {}
+ircrypt_keys_memory      = {}
 ircrypt_gpg_binary       = None
 ircrypt_message_plain    = {}
 ircrypt_gpg_homedir      = None
@@ -99,7 +95,6 @@ Add, change or remove special cipher for nick or channel.
 %(bold)sIRCrypt command options: %(normal)s
 
 list                                                 List set keys, ids and ciphers
-buffer                                               Switch to/Open IRCrypt buffer
 set-key         [-server <server>] <target> <key>    Set key for target
 remove-key      [-server <server>] <target>          Remove key for target
 set-gpg-id      [-server <server>] <nick> <id>       Set public key identifier for nick
@@ -217,24 +212,23 @@ def ircrypt_public_key_send(server, args, info):
 
 
 def ircrypt_public_key_get(server, args, info):
-	global ircrypt_keys_buffer, ircrypt_asym_id
+	global ircrypt_keys_memory, ircrypt_asym_id
 
 	# Get prefix, number and message
 	pre, message    = args.split('>KCRY-', 1)
 	number, message = message.split(' ', 1)
 
-	# Get key for the request buffer
 	buf_key = (server, info['channel'], info['nick'])
 
 	# Check if we got the last part of the message otherwise put the message
-	# into a global buffer and quit
+	# into a global memory and quit
 	if int(number):
-		if not buf_key in ircrypt_keys_buffer:
+		if not buf_key in ircrypt_keys_memory:
 			# - First element is list of requests
 			# - Second element is currently received request
-			ircrypt_keys_buffer[buf_key] = MessageParts()
+			ircrypt_keys_memory[buf_key] = MessageParts()
 		# Add parts to current request
-		ircrypt_keys_buffer[buf_key].update(int(number), message)
+		ircrypt_keys_memory[buf_key].update(int(number), message)
 		return ''
 	else:
 		target = ('%s/%s' % (server, info['nick'])).lower()
@@ -249,7 +243,7 @@ def ircrypt_public_key_get(server, args, info):
 			'--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE)
 		(out, err) = p.communicate(base64.b64decode(message +
-			ircrypt_keys_buffer[buf_key].message))
+			ircrypt_keys_memory[buf_key].message))
 
 		weechat.prnt('', err)
 
@@ -273,8 +267,8 @@ def ircrypt_public_key_get(server, args, info):
 
 		# Set asymmetric identifier
 		ircrypt_asym_id[target.lower()] = gpg_id
-		# Print status message in current buffer
 		weechat.prnt('', 'Set gpg key for %s' % target)
+		# Print status message in current buffer
 		ircrypt_sym_ex(server, info['nick'])
 		return ''
 
@@ -384,25 +378,25 @@ def ircrypt_decrypt_sym(server, args, info, key):
 	:param info: dictionary created by info_get_hashtable
 	:param key: key for decryption
 	'''
-	global ircrypt_msg_buffer, ircrypt_config_option
+	global ircrypt_msg_memory, ircrypt_config_option
 
 	pre, message    = string.split(args, '>CRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
-	# Get key for the message buffer
+	# Get key for the message memory
 	buf_key = '%s.%s.%s' % (server, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
-	# otherwise put the message into a globa buffer and quit
+	# otherwise put the message into a global memory and quit
 	if int(number) != 0:
-		if not buf_key in ircrypt_msg_buffer:
-			ircrypt_msg_buffer[buf_key] = MessageParts()
-		ircrypt_msg_buffer[buf_key].update(int(number), message)
+		if not buf_key in ircrypt_msg_memory:
+			ircrypt_msg_memory[buf_key] = MessageParts()
+		ircrypt_msg_memory[buf_key].update(int(number), message)
 		return ''
 
 	# Get whole message
 	try:
-		message = message + ircrypt_msg_buffer[buf_key].message
+		message = message + ircrypt_msg_memory[buf_key].message
 	except KeyError:
 		pass
 
@@ -432,9 +426,9 @@ def ircrypt_decrypt_sym(server, args, info, key):
 	elif err:
 		weechat.prnt(buf, '%s%s' % (weechat.color('gray'), err))
 
-	# Remove old messages from buffer
+	# Remove old messages from memory
 	try:
-		del ircrypt_msg_buffer[buf_key]
+		del ircrypt_msg_memory[buf_key]
 	except KeyError:
 		pass
 	return '%s%s' % (pre, decrypted)
@@ -1087,7 +1081,6 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 
 	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
 			'[list] '
-			'| buffer '
 			'| set-key [-server <server>] <target> <key> '
 			'| remove-key [-server <server>] <target> '
 			'| request-public-key [-server <server>] <nick>'
@@ -1099,7 +1092,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 			'| verify-keys [-server <server>] [<nick>] '
 			'| plain [-server <server>] [-channel <channel>] <message>',
 			ircrypt_help_text,
-			'list || buffer || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
 			'|| verify-requests %(nicks)|-server %(irc_servers) %- '
