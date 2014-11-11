@@ -73,7 +73,8 @@ ircrypt_config_option    = {}
 ircrypt_keys             = {}
 ircrypt_asym_id          = {}
 ircrypt_cipher           = {}
-ircrypt_keys_memory      = {}
+ircrypt_pub_keys_memory  = {}
+ircrypt_sym_keys_memory  = {}
 ircrypt_gpg_binary       = None
 ircrypt_message_plain    = {}
 ircrypt_gpg_homedir      = None
@@ -82,6 +83,7 @@ ircrypt_gpg_id           = None
 # Constants used throughout this script
 MAX_PART_LEN     = 300
 MSG_PART_TIMEOUT = 300 # 5min
+KEY_PART_TIMEOUT = 100
 NEVER            = 0
 ALWAYS           = 1
 IF_NEW           = 2
@@ -190,6 +192,30 @@ class MessageParts:
 		self.modified = time.time()
 
 
+class SymKeyParts:
+	'''Class used for storing parts of symmetric keys which were generate by two
+	userns.'''
+
+	modified = 0
+	parts = 0
+	key  = ''
+
+	def update(self, keypart):
+		'''This method updates an already existing message part by adding a new
+		part to the old ones and updating the identifier of the latest received
+		message part.
+		'''
+		if time.time() - self.modified > KEY_PART_TIMEOUT or self.parts > 1:
+			self.key = ''
+			self.parts = 0
+		if self.key == '':
+			self.key = keypart
+		else:
+			self.key = ''.join(chr(ord(x) ^ ord(y)) for x, y in zip(self.key, keypart))
+		self.parts = self.parts + 1
+		self.modified = time.time()
+
+
 def ircrypt_public_key_send(server, args, info):
 	global ircrypt_gpg_homedir, ircrypt_gpg_id
 
@@ -212,23 +238,23 @@ def ircrypt_public_key_send(server, args, info):
 
 
 def ircrypt_public_key_get(server, args, info):
-	global ircrypt_keys_memory, ircrypt_asym_id
+	global ircrypt_pub_keys_memory, ircrypt_asym_id
 
 	# Get prefix, number and message
 	pre, message    = args.split('>KCRY-', 1)
 	number, message = message.split(' ', 1)
 
-	buf_key = (server, info['channel'], info['nick'])
+	catchword = (server, info['channel'], info['nick'])
 
 	# Check if we got the last part of the message otherwise put the message
 	# into a global memory and quit
 	if int(number):
-		if not buf_key in ircrypt_keys_memory:
+		if not catchword in ircrypt_pub_keys_memory:
 			# - First element is list of requests
 			# - Second element is currently received request
-			ircrypt_keys_memory[buf_key] = MessageParts()
+			ircrypt_pub_keys_memory[catchword] = MessageParts()
 		# Add parts to current request
-		ircrypt_keys_memory[buf_key].update(int(number), message)
+		ircrypt_pub_keys_memory[catchword].update(int(number), message)
 		return ''
 	else:
 		target = ('%s/%s' % (server, info['nick'])).lower()
@@ -243,7 +269,7 @@ def ircrypt_public_key_get(server, args, info):
 			'--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE)
 		(out, err) = p.communicate(base64.b64decode(message +
-			ircrypt_keys_memory[buf_key].message))
+			ircrypt_pub_keys_memory[catchword].message))
 
 		weechat.prnt('', err)
 
@@ -273,10 +299,79 @@ def ircrypt_public_key_get(server, args, info):
 		return ''
 
 
+def ircrypt_sym_key_get(server, args, info):
+	global ircrypt_pub_keys_memory, ircrypt_asym_id
+
+	# Get prefix, number and message
+	pre, message    = args.split('>KEY-EX-', 1)
+	number, message = message.split(' ', 1)
+
+	catchword = (server, info['channel'], info['nick'])
+
+	# Decrypt only if we got last part of the message
+	# otherwise put the message into a global memory and quit
+	if int(number) != 0:
+		if not catchword in ircrypt_msg_memory:
+			ircrypt_msg_memory[catchword] = MessageParts()
+		ircrypt_msg_memory[catchword].update(int(number), message)
+		return ''
+
+	# Get whole message
+	try:
+		message = message + ircrypt_msg_memory[catchword].message
+	except KeyError:
+		pass
+
+	# Get message buffer in case we need to print an error
+	buf = weechat.buffer_search('irc', '%s.%s' % (server,info['channel']))
+
+	# Decode base64 encoded message
+	try:
+		message = base64.b64decode(message)
+	except TypeError:
+		weechat.prnt(buf, '%s%sCould not Base64 decode message.' %
+				(weechat.prefix('error'), weechat.color('red')))
+		return ''
+
+	# Decrypt
+	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
+		'--batch',  '--no-tty', '--quiet', '-d'], stdin=subprocess.PIPE,
+		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	key, err = p.communicate(message)
+
+	# Get and print GPG errors/warnings
+	err = '\n'.join(['  ▼ ' + line for line in err.split('\n') if line])
+	if p.returncode:
+		weechat.prnt(buf, '%s%s%s' %
+				(weechat.prefix('error'), weechat.color('red'), err))
+		return args
+	elif err:
+		weechat.prnt(buf, '%s%s' % (weechat.color('gray'), err))
+
+	# Remove old messages from memory
+	try:
+		del ircrypt_msg_memory[catchword]
+	except KeyError:
+		pass
+
+	target = '%s/%s' % (server, info['nick'])
+	if not target in ircrypt_sym_keys_memory:
+		ircrypt_sym_keys_memory[target] = SymKeyParts()
+	ircrypt_sym_keys_memory[target].update(key)
+	if ircrypt_sym_keys_memory[target].parts == 2:
+		ircrypt_command_set_keys(target,
+				base64.b64encode(ircrypt_sym_keys_memory[target].key))
+		del ircrypt_sym_keys_memory[target]
+	return ''
+
+
 def ircrypt_sym_ex(server, nick):
-	global ircrypt_asym_id
+	global ircrypt_asym_id, ircrypt_sym_keys_memory
 	key = os.urandom(64)
+
+	# Get key for the key memory
 	target = '%s/%s' % (server, nick)
+
 	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
 		'--batch', '--no-tty', '--quiet', '-s', '--trust-model', 'always', '-e',
 		'-r', ircrypt_asym_id[target]], stdin=subprocess.PIPE,
@@ -284,6 +379,13 @@ def ircrypt_sym_ex(server, nick):
 	(out, err) = p.communicate(key)
 	if err:
 		weechat.prnt('', err)
+	if not target in ircrypt_sym_keys_memory:
+		ircrypt_sym_keys_memory[target] = SymKeyParts()
+	ircrypt_sym_keys_memory[target].update(key)
+	if ircrypt_sym_keys_memory[target].parts == 2:
+		ircrypt_command_set_keys(target,
+				base64.b64encode(ircrypt_sym_keys_memory[target].key))
+		del ircrypt_sym_keys_memory[target]
 	out = base64.b64encode(out)
 	for i in range(1 + (len(out) / 400))[::-1]:
 		msg = '>KEY-EX-%i %s' % (i, out[i*400:(i+1)*400])
@@ -384,19 +486,19 @@ def ircrypt_decrypt_sym(server, args, info, key):
 	number, message = string.split(message, ' ', 1 )
 
 	# Get key for the message memory
-	buf_key = '%s.%s.%s' % (server, info['channel'], info['nick'])
+	catchword = '%s.%s.%s' % (server, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
 	# otherwise put the message into a global memory and quit
 	if int(number) != 0:
-		if not buf_key in ircrypt_msg_memory:
-			ircrypt_msg_memory[buf_key] = MessageParts()
-		ircrypt_msg_memory[buf_key].update(int(number), message)
+		if not catchword in ircrypt_msg_memory:
+			ircrypt_msg_memory[catchword] = MessageParts()
+		ircrypt_msg_memory[catchword].update(int(number), message)
 		return ''
 
 	# Get whole message
 	try:
-		message = message + ircrypt_msg_memory[buf_key].message
+		message = message + ircrypt_msg_memory[catchword].message
 	except KeyError:
 		pass
 
@@ -428,7 +530,7 @@ def ircrypt_decrypt_sym(server, args, info, key):
 
 	# Remove old messages from memory
 	try:
-		del ircrypt_msg_memory[buf_key]
+		del ircrypt_msg_memory[catchword]
 	except KeyError:
 		pass
 	return '%s%s' % (pre, decrypted)
@@ -950,14 +1052,17 @@ def ircrypt_notice_hook(data, msgtype, server, args):
 	if '>KEY-EX-PONG' in args:
 		return ircrypt_pong_pong(server, args, info)
 
+	if '>KEY-EX-CONTINUE' in args:
+		return ircrypt_pong_pong_pong(server, args, info)
+
+	if '>KEY-EX-' in args:
+		return ircrypt_sym_key_get(server, args, info)
+
 	if '>KEY-REQUEST' in args:
 		return ircrypt_public_key_send(server, args, info)
 
 	if '>KCRY-' in args:
 		return ircrypt_public_key_get(server, args, info)
-
-	if '>KEY-EX-CONTINUE' in args:
-		return ircrypt_pong_pong_pong(server, args, info)
 
 	return args
 
