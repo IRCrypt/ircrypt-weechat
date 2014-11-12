@@ -957,6 +957,9 @@ def ircrypt_command(data, buffer, args):
 		else:
 			# Try to determine the server automatically
 			channel = weechat.buffer_get_string(buffer, 'localvar_channel')
+		# If there is no text, just ignore the command
+		if len(argv) < 2:
+			return weechat.WEECHAT_RC_OK
 		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
 		msg = marker + ' ' + args.split(' ', 1)[-1]
 		ircrypt_message_plain['%s/%s' % (server, channel)] = (time.time(), msg)
