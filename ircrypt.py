@@ -1183,41 +1183,42 @@ def ircrypt_key_generated_cb(data, command, errorcode, out, err):
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 	# register the modifiers
-	weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
-	weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
-	weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
-
-	weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
-			'[list] '
-			'| set-key [-server <server>] <target> <key> '
-			'| remove-key [-server <server>] <target> '
-			'| request-public-key [-server <server>] <nick>'
-			'| remove-public-key [-server <server>] <nick> '
-			'| set-cipher [-server <server>] <target> <cipher> '
-			'| remove-cipher [-server <server>] <target> '
-			'| exchange [-server <server>] <nick> [<target>] '
-			'| verify-requests [-server <server>] [<nick>] '
-			'| verify-keys [-server <server>] [<nick>] '
-			'| plain [-server <server>] [-channel <channel>] <message>',
-			ircrypt_help_text,
-			'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-			'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
-			'|| verify-requests %(nicks)|-server %(irc_servers) %- '
-			'|| verify-keys %(nicks)|-server %(irc_servers) %- '
-			'|| request-public-key %(nicks)|-server %(irc_servers) %- '
-			'|| remove-public-key %(nicks)|-server %(irc_servers) %- '
-			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
-			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
-			'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
-			'ircrypt_command', '')
-
 	ircrypt_config_init()
 	ircrypt_config_read()
 	ircrypt_check_binary()
-	ircrypt_init()
-	weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
-	weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
+	ircrypt_gpg_binary = None
+	if ircrypt_gpg_binary:
+		weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
+		weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
+		weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
+
+		weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
+				'[list] '
+				'| set-key [-server <server>] <target> <key> '
+				'| remove-key [-server <server>] <target> '
+				'| request-public-key [-server <server>] <nick>'
+				'| remove-public-key [-server <server>] <nick> '
+				'| set-cipher [-server <server>] <target> <cipher> '
+				'| remove-cipher [-server <server>] <target> '
+				'| exchange [-server <server>] <nick> [<target>] '
+				'| verify-requests [-server <server>] [<nick>] '
+				'| verify-keys [-server <server>] [<nick>] '
+				'| plain [-server <server>] [-channel <channel>] <message>',
+				ircrypt_help_text,
+				'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+				'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+				'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
+				'|| verify-requests %(nicks)|-server %(irc_servers) %- '
+				'|| verify-keys %(nicks)|-server %(irc_servers) %- '
+				'|| request-public-key %(nicks)|-server %(irc_servers) %- '
+				'|| remove-public-key %(nicks)|-server %(irc_servers) %- '
+				'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
+				'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
+				'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
+				'ircrypt_command', '')
+		ircrypt_init()
+		weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
+		weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
 
 
 def ircrypt_unload_script():
