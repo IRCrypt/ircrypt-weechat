@@ -89,81 +89,57 @@ ALWAYS           = 1
 IF_NEW           = 2
 
 
-ircrypt_help_text = '''
-Add, change or remove key for nick or channel.
-Add, change or remove public key identifier for nick.
-Add, change or remove special cipher for nick or channel.
-
-%(bold)sIRCrypt command options: %(normal)s
-
-list                                                 List set keys, ids and ciphers
-set-key         [-server <server>] <target> <key>    Set key for target
-remove-key      [-server <server>] <target>          Remove key for target
-set-gpg-id      [-server <server>] <nick> <id>       Set public key identifier for nick
-remove-gpg-id   [-server <server>] <nick>            Remove public key identifier for nick
-set-cipher      [-server <server>] <target> <cipher> Set specific cipher for channel
-remove-cipher   [-server <server>] <target>          Remove specific cipher for channel
-exchange        [-server <server>] <nick> [<target>] Request key for channel from nick
-verify-requests [-server <server>] [<nick>]          Check signature of incomming key requests
-verify-keys     [-server <server>] [<nick>]          Check signature of received keys
-plain           [-server <s>] [-channel <ch>] <msg>  Send unencrypted message
-
+ircrypt_help_text = '''%(bold)sIRCrypt command options: %(normal)s
+list                                                    List set keys, public key ids and ciphers
+set-key            [-server <server>] <target> <key>    Set key for target
+remove-key         [-server <server>] <target>          Remove key for target
+query              [-server <server>] <nick>            Start key exchange with nick
+set-cipher         [-server <server>] <target> <cipher> Set specific cipher for target
+remove-cipher      [-server <server>] <target>          Remove specific cipher for target
+request-public-key [-server <server>] <nick>            Request public key id for nick
+remove-public-key  [-server <server>] <nick>            Remove public key id for nick
+plain              [-server <s>] [-channel <ch>] <msg>  Send unencrypted message
 
 %(bold)sExamples: %(normal)s
-
 Set the key for a channel:
-  /ircrypt set-key -server freenet #IRCrypt key
+   /ircrypt set-key -server freenet #IRCrypt key
 Remove the key:
-  /ircrypt remove-key #IRCrypt
-Set the key for a user:
-  /ircrypt set-key nick key
-Set the public key identifier for a user:
-  /ircrypt set-gpg-id -server freenode nick Id
+   /ircrypt remove-key #IRCrypt
+Start key exchange with a user
+   /ircrypt query nick
+Request public key identifier for a user:
+   /ircrypt request-public-key nick
 Remove public key identifier for a user:
-  /ircrypt remove-gpg-id nick
+   /ircrypt remove-public-key nick
 Switch to a specific cipher for a channel:
-  /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
+   /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
 Unset the specific cipher for a channel:
-  /ircrypt remove-cipher #IRCrypt
+   /ircrypt remove-cipher #IRCrypt
 Send unencrypted “Hello” to current channel
-  /ircrypt plain Hello
-
+   /ircrypt plain Hello
 
 %(bold)sConfiguration: %(normal)s
-
 Tip: You can list all options and what they are currently set to by executing:
    /set ircrypt.*
-
 %(bold)sircrypt.marker.encrypted %(normal)s
-   This option will set a string which is displayed in encrypted channels,
-   indicating that the current channel is encrypted. If “{{cipher}}” is used as
-   part of this string, it will be replaced by the cipher currently used by
-   oneself for that particular channel.
+   If you add 'ircrypt' to weechat.bar.status.items, these option will set a
+   string which is displayed in the status bar of an encrypted channels,
+   indicating that the current channel is encrypted.
+   If “{{cipher}}” is used as part of this string, it will be replaced by the
+   cipher currently used by oneself for that particular channel.
+   It is woth noting that you probably don't want to replace the whole value of
+   that option but extend it instead in a way like:
+      /set weechat.bar.status.items {{currentContent}},ircrypt
 %(bold)sircrypt.marker.unencrypted %(normal)s
    This option will set a string which is displayed before each message that is
    send unencrypted in a channel for which a key is set. So you know when
    someone is talking to you without encryption.
-%(bold)sircrypt.cipher.asym_enabled %(normal)s
-   This enables asymmetric encryption which can be used for encrypted
-   communication without key exchange. It is only required that the public key
-   identifier of the communication partner is set.
-%(bold)sircrypt.cipher.exchange_enabled %(normal)s
-   This option enables key exchange based on GPG and its public key
-   infrastructure. During a key exchange the identity of both communication
-   partners can be verified and finally, a key can be exchanged on a secure
-   way.
 %(bold)sircrypt.cipher.sym_cipher %(normal)s
    This will set the default cipher used for symmetric encryption. You can get
    a list of available ciphers by running “gpg --version”.
-
-Additional to these direct configuration options you can add 'ircrypt' to
-weechat.bar.status.items to have an indication that the message you are going
-to send is encrypted. The message displayed id the one set with the
-configuration option ircrypt.marker.encrypted.
-
-It is woth noting that you probably don't want to replace the whole value of
-that option but extend it instead in a way like:
-   /set weechat.bar.status.items {{currentContent}},ircrypt
+%(bold)sircrypt.general.binary %(normal)s
+   This will set the GnuPG binary used for encryption and decryption. IRCrypt
+   will try to set this automatically.
 ''' % {'bold':weechat.color('bold'), 'normal':weechat.color('-bold')}
 
 
@@ -1191,24 +1167,20 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
 		weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
 
-		weechat.hook_command('ircrypt', 'Manage IRCrypt Keys and public key identifier',
-				'[list] '
+		weechat.hook_command('ircrypt', 'Commands to manage IRCrypt options and execute IRCrypt commands',
+				'[list]'
 				'| set-key [-server <server>] <target> <key> '
 				'| remove-key [-server <server>] <target> '
 				'| request-public-key [-server <server>] <nick>'
 				'| remove-public-key [-server <server>] <nick> '
 				'| set-cipher [-server <server>] <target> <cipher> '
 				'| remove-cipher [-server <server>] <target> '
-				'| exchange [-server <server>] <nick> [<target>] '
-				'| verify-requests [-server <server>] [<nick>] '
-				'| verify-keys [-server <server>] [<nick>] '
+				'| query [-server <server>] <nick> '
 				'| plain [-server <server>] [-channel <channel>] <message>',
 				ircrypt_help_text,
 				'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 				'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-				'|| exchange %(nicks) %(irc_channel) -server %(irc_servers)'
-				'|| verify-requests %(nicks)|-server %(irc_servers) %- '
-				'|| verify-keys %(nicks)|-server %(irc_servers) %- '
+				'|| query %(nicks) -server %(irc_servers)'
 				'|| request-public-key %(nicks)|-server %(irc_servers) %- '
 				'|| remove-public-key %(nicks)|-server %(irc_servers) %- '
 				'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
