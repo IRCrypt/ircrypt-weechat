@@ -1186,7 +1186,6 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	ircrypt_config_init()
 	ircrypt_config_read()
 	ircrypt_check_binary()
-	ircrypt_gpg_binary = None
 	if ircrypt_gpg_binary:
 		weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
 		weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
