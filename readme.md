@@ -10,7 +10,10 @@ already be used to send and receive messages encrypted with cryptographically
 strong symmetric ciphers.
 
 IRCrypt supports symmetric encryption with all ciphers supported by
-GnuPG and key exchange with public key authentication.
+GnuPG and key exchange with public key authentication. For this IRCrypt creates
+an own GnuPG homefolder and generates a key only used in IRCrypt. Other public
+keys related to IRCrypt are also stored in that folder and do not inflict with
+other GnuPG folder.
 
 Requirements
 ------------
