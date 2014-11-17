@@ -74,7 +74,6 @@ ircrypt_keys             = {}
 ircrypt_asym_id          = {}
 ircrypt_cipher           = {}
 ircrypt_pub_keys_memory  = {}
-ircrypt_sym_keys_memory  = {}
 ircrypt_key_ex_memory    = {}
 ircrypt_gpg_binary       = None
 ircrypt_message_plain    = {}
@@ -84,7 +83,6 @@ ircrypt_gpg_id           = None
 # Constants used throughout this script
 MAX_PART_LEN     = 300
 MSG_PART_TIMEOUT = 300 # 5min
-KEY_PART_TIMEOUT = 100
 NEVER            = 0
 ALWAYS           = 1
 IF_NEW           = 2
@@ -163,30 +161,6 @@ class MessageParts:
 			self.message = ''
 		self.last_id = id
 		self.message = msg + self.message
-		self.modified = time.time()
-
-
-class SymKeyParts:
-	'''Class used for storing parts of symmetric keys which were generate by two
-	userns.'''
-
-	modified = 0
-	parts = 0
-	key  = ''
-
-	def update(self, keypart):
-		'''This method updates an already existing message part by adding a new
-		part to the old ones and updating the identifier of the latest received
-		message part.
-		'''
-		if time.time() - self.modified > KEY_PART_TIMEOUT or self.parts > 1:
-			self.key = ''
-			self.parts = 0
-		if self.key == '':
-			self.key = keypart
-		else:
-			self.key = ''.join(chr(ord(x) ^ ord(y)) for x, y in zip(self.key, keypart))
-		self.parts = self.parts + 1
 		self.modified = time.time()
 
 
