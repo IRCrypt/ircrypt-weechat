@@ -246,7 +246,7 @@ def ircrypt_receive_key_ex_pong(server, args, info):
 			weechat.command('','/mute -all notice -server %s %s >KEY-EX-NEXT-PHASE-2' \
 					% (server, info['nick']))
 			if not ircrypt_key_ex_memory[target].pub_key_send:
-				ircrypt_public_key_send(server, args, info)
+				ircrypt_public_key_send(server, info['nick'])
 	else:
 		weechat.command('','/mute -all notice -server %s %s >UCRY-PONG-WITHOUT-PING' \
 				% (server, info['nick']))
@@ -278,7 +278,7 @@ def ircrypt_receive_next_phase(server, args, info):
 		elif int(number) == 2:
 			ircrypt_key_ex_memory[target].phase = 2
 			if not ircrypt_key_ex_memory[target].pub_key_send:
-				ircrypt_public_key_send(server, args, info)
+				ircrypt_public_key_send(server, info['nick'])
 		else:
 			weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE' \
 					% (server, info['nick']))
@@ -438,20 +438,6 @@ def ircrypt_sym_key_get(server, args, info):
 	pre, message    = args.split('>SYM-EX-', 1)
 	number, message = message.split(' ', 1)
 
-	target = ('%s/%s' % (server, info['nick'])).lower()
-
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s >UCRY-SYMMETRIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
-		return ''
-
-	if not ircrypt_key_ex_memory[target].phase == 3:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE-FOR-SYMMETRIC-KEY-EXCHANGE' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
 	catchword = (server, info['channel'], info['nick'])
 
 	# Decrypt only if we got last part of the message
@@ -467,6 +453,21 @@ def ircrypt_sym_key_get(server, args, info):
 		message = message + ircrypt_msg_memory[catchword].message
 	except KeyError:
 		pass
+
+	target = ('%s/%s' % (server, info['nick'])).lower()
+
+	if not ircrypt_key_ex_memory.get(target):
+		weechat.command('','/mute -all notice -server %s %s >UCRY-SYMMETRIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
+		return ''
+
+	if not ircrypt_key_ex_memory[target].phase == 3:
+		weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE-FOR-SYMMETRIC-KEY-EXCHANGE' % (server, info['nick']))
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
+
 
 	# Get message buffer in case we need to print an error
 	buf = weechat.buffer_search('irc', '%s.%s' % (server,info['channel']))
