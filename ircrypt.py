@@ -168,13 +168,14 @@ class KeyExchange:
 	'''Class used for key exchange'''
 
 	phase = 1
-	pub_key_get = False
+	pub_key_receive = False
 	pub_key_send = False
 	parts = 0
 	sym_key  = ''
+	sym_received = False
 
-	def __init__(self, pub_key_get, pub_key_send):
-		self.pub_key_get = pub_key_get
+	def __init__(self, pub_key_receive, pub_key_send):
+		self.pub_key_receive = pub_key_receive
 		self.pub_key_send = pub_key_send
 
 	def update(self, keypart):
@@ -202,25 +203,32 @@ def ircrypt_receive_key_ex_ping(server, args, info):
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG %s' \
 				% (server, info['nick'], gpg_id))
 		if fingerprint:
-			ircrypt_key_ex_memory[target] = KeyExchange(True, True)
+			ircrypt_key_ex_memory[target] = KeyExchange(False, False)
 		else:
-			ircrypt_key_ex_memory[target] = KeyExchange(True, False)
+			ircrypt_key_ex_memory[target] = KeyExchange(False, True)
 	else:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG' \
 				% (server, info['nick']))
 		if fingerprint:
-			ircrypt_key_ex_memory[target] = KeyExchange(False, True)
+			ircrypt_key_ex_memory[target] = KeyExchange(True, False)
 		else:
-			ircrypt_key_ex_memory[target] = KeyExchange(False, False)
+			ircrypt_key_ex_memory[target] = KeyExchange(True, True)
 	return ''
 
 
 def ircrypt_receive_key_ex_pong(server, args, info):
 	'''This function handles incomming >KEY-EX-PONG notices'''
-
 	global ircrypt_gpg_id, ircrypt_key_ex_memory
-	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
+
 	target = '%s/%s' % (server, info['nick'])
+
+	if not ircrypt_key_ex_memory.get(target):
+		weechat.command('','/mute -all notice -server %s %s >UCRY-PONG-WITHOUT-PING' \
+				% (server, info['nick']))
+		return ''
+
+	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
+
 	# Wrong fingerprint: Send back and error and try to delete instance of class
 	# KeyExchange
 	if fingerprint and fingerprint != ircrypt_gpg_id:
@@ -231,69 +239,44 @@ def ircrypt_receive_key_ex_pong(server, args, info):
 		except KeyError:
 			pass
 		return ''
-	# Send back a >KEY-EX-NEXT-PHASE to continue key exchange or send back a
-	# error. Continue with phase 2 or 3 of Also save, whether the public keys have already been exchanged
-	if ircrypt_key_ex_memory.get(target):
-		if fingerprint:
-			ircrypt_key_ex_memory[target].pub_key_send = True
-		if ircrypt_key_ex_memory[target].pub_key_send and ircrypt_key_ex_memory[target].pub_key_get:
-			ircrypt_key_ex_memory[target].phase = 3
-			weechat.command('','/mute -all notice -server %s %s >KEY-EX-NEXT-PHASE-3' \
-					% (server, info['nick']))
-			ircrypt_sym_key_send(server, info['nick'])
-		else:
-			ircrypt_key_ex_memory[target].phase = 2
-			weechat.command('','/mute -all notice -server %s %s >KEY-EX-NEXT-PHASE-2' \
-					% (server, info['nick']))
-			if not ircrypt_key_ex_memory[target].pub_key_send:
-				ircrypt_public_key_send(server, info['nick'])
-	else:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-PONG-WITHOUT-PING' \
-				% (server, info['nick']))
+
+	if fingerprint:
+		ircrypt_key_ex_memory[target].pub_key_send = False
+
+	weechat.command('','/mute -all notice -server %s %s >KEY-EX-NEXT-PHASE' \
+			% (server, info['nick']))
+
+	if (ircrypt_key_ex_memory[target].pub_key_send,ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
+		ircrypt_sym_key_send(server, info['nick'])
+	elif ircrypt_key_ex_memory[target].pub_key_send:
+		ircrypt_public_key_send(server, info['nick'])
+
 	return ''
 
 
 def ircrypt_receive_next_phase(server, args, info):
-	'''This function handles incomming >KEY-EX-NEXT-PHASE- notices'''
+	'''This function handles incomming >KEY-EX-NEXT-PHASE notices'''
 	global ircrypt_gpg_id, ircrypt_key_ex_memory
-	# Get prefix and number
-	pre, number    = args.split('>KEY-EX-NEXT-PHASE-', 1)
+
 	target = '%s/%s' % (server, info['nick'])
 
-	try:
-		number = int(number)
-	except:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE' \
+	if not ircrypt_key_ex_memory.get(target):
+		weechat.command('','/mute -all notice -server %s %s >UCRY-PONG-WITHOUT-PING' \
 				% (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
 		return ''
 
-	if ircrypt_key_ex_memory.get(target):
-		if ircrypt_key_ex_memory[target].pub_key_send and ircrypt_key_ex_memory[target].pub_key_get and int(number) == 3:
-			ircrypt_key_ex_memory[target].phase = 3
-			ircrypt_sym_key_send(server, info['nick'])
-		elif int(number) == 2:
-			ircrypt_key_ex_memory[target].phase = 2
-			if not ircrypt_key_ex_memory[target].pub_key_send:
-				ircrypt_public_key_send(server, info['nick'])
-		else:
-			weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE' \
-					% (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-	else:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-NEXT-PHASE-WITHOUT-PING' \
-				% (server, info['nick']))
+	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
+
+	if (ircrypt_key_ex_memory[target].pub_key_send,ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
+		ircrypt_sym_key_send(server, info['nick'])
+	elif ircrypt_key_ex_memory[target].pub_key_send:
+		ircrypt_public_key_send(server, info['nick'])
+
 	return ''
 
 
 def ircrypt_public_key_send(server, nick):
-	global ircrypt_gpg_homedir, ircrypt_gpg_id
+	global ircrypt_gpg_homedir, ircrypt_gpg_id, ircrypt_key_ex_memory
 
 	if ircrypt_gpg_id:
 		p = subprocess.Popen([ircrypt_gpg_binary, '--batch', '--no-tty',
@@ -310,6 +293,10 @@ def ircrypt_public_key_send(server, nick):
 	for i in range(1 + (len(key) / 400))[::-1]:
 		msg = '>PUB-EX-%i %s' % (i, key[i*400:(i+1)*400])
 		weechat.command('','/mute -all notice -server %s %s %s' % (server, nick, msg))
+
+	target = '%s/%s' % (server, nick)
+
+
 	return ''
 
 
@@ -322,18 +309,6 @@ def ircrypt_public_key_get(server, args, info):
 
 	target = ('%s/%s' % (server, info['nick'])).lower()
 
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s >UCRY-PUBLIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
-		return ''
-
-	if not ircrypt_key_ex_memory[target].phase == 2:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE-FOR-PUBLIC-KEY-EXCHANGE' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
 	# Check if we got the last part of the message otherwise put the message
 	# into a global memory and quit
 	if int(number):
@@ -345,6 +320,19 @@ def ircrypt_public_key_get(server, args, info):
 		ircrypt_pub_keys_memory[target].update(int(number), message)
 		return ''
 	else:
+
+		if not ircrypt_key_ex_memory.get(target):
+			weechat.command('','/mute -all notice -server %s %s >UCRY-PUBLIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
+			return ''
+
+		if not ircrypt_key_ex_memory[target].pub_key_receive:
+			weechat.command('','/mute -all notice -server %s %s >UCRY-NO-REQUEST-FOR-PUBLIC-KEY' % (server, info['nick']))
+			try:
+				del ircrypt_key_ex_memory[target]
+			except KeyError:
+				pass
+			return ''
+
 		# check asymmetric key id
 		key_id = ircrypt_asym_id.get(target)
 		if key_id:
@@ -380,8 +368,15 @@ def ircrypt_public_key_get(server, args, info):
 
 		# Set asymmetric identifier
 		ircrypt_asym_id[target.lower()] = gpg_id
+
+		ircrypt_key_ex_memory[target].pub_key_receive = False
+
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PUB-RECEIVED' % (server, info['nick']))
-		return ''
+
+		if (ircrypt_key_ex_memory[target].pub_key_send,ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
+			ircrypt_sym_key_send(server, info['nick'])
+
+	return ''
 
 
 def ircrypt_receive_key_ex_pub_received(server, args, info):
@@ -389,20 +384,15 @@ def ircrypt_receive_key_ex_pub_received(server, args, info):
 
 	target = '%s/%s' % (server, info['nick'])
 
-	if ircrypt_key_ex_memory.get(target):
-		if ircrypt_key_ex_memory[target].phase == 2:
-			ircrypt_key_ex_memory[target].phase = 3
-			ircrypt_sym_key_send(server, info['nick'])
-		else:
-			weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE' \
-					% (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-	else:
+	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s >UCRY-KEY-EX-PUB-RECEIVED-WITHOUT-PING' \
 				% (server, info['nick']))
+
+	ircrypt_key_ex_memory[target].pub_key_send = False
+
+	if (ircrypt_key_ex_memory[target].pub_key_send,ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
+		ircrypt_sym_key_send(server, info['nick'])
+
 	return ''
 
 
@@ -424,6 +414,8 @@ def ircrypt_sym_key_send(server, nick):
 	ircrypt_key_ex_memory[target].update(keypart)
 	if ircrypt_key_ex_memory[target].parts == 2:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-SYM-RECEIVED' % (server, nick))
+		if ircrypt_key_ex_memory[target].sym_received:
+			weechat.command('','/ircrypt set-key -server %s %s %s' % (server, info['nick'],  base64.b64encode(ircrypt_key_ex_memory[target].sym_key)))
 
 	out = base64.b64encode(out)
 	for i in range(1 + (len(out) / 400))[::-1]:
@@ -460,8 +452,8 @@ def ircrypt_sym_key_get(server, args, info):
 		weechat.command('','/mute -all notice -server %s %s >UCRY-SYMMETRIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
 		return ''
 
-	if not ircrypt_key_ex_memory[target].phase == 3:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE-FOR-SYMMETRIC-KEY-EXCHANGE' % (server, info['nick']))
+	if ircrypt_key_ex_memory[target].pub_key_send or ircrypt_key_ex_memory[target].pub_key_receive:
+		weechat.command('','/mute -all notice -server %s %s >UCRY-NO-REQUEST-FOR-SYMMETRIC-KEY' % (server, info['nick']))
 		try:
 			del ircrypt_key_ex_memory[target]
 		except KeyError:
@@ -506,6 +498,8 @@ def ircrypt_sym_key_get(server, args, info):
 	ircrypt_key_ex_memory[target].update(key)
 	if ircrypt_key_ex_memory[target].parts == 2:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-SYM-RECEIVED' % (server, info['nick']))
+		if ircrypt_key_ex_memory[target].sym_received:
+			weechat.command('','/ircrypt set-key -server %s %s %s' % (server, info['nick'],  base64.b64encode(ircrypt_key_ex_memory[target].sym_key)))
 	return ''
 
 
@@ -514,26 +508,22 @@ def ircrypt_receive_key_ex_sym_received(server, args, info):
 
 	target = '%s/%s' % (server, info['nick'])
 
-	if ircrypt_key_ex_memory.get(target):
-		if not ircrypt_key_ex_memory[target].phase == 3:
-			weechat.command('','/mute -all notice -server %s %s >UCRY-WRONG-PHASE' \
-					% (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-		elif not  ircrypt_key_ex_memory[target].parts == 2:
-			weechat.command('','/mute -all notice -server %s %s >UCRY-NOT-ENOUGH-PARTS' \
-					% (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-		else:
+	if not ircrypt_key_ex_memory.get(target):
+		weechat.command('','/mute -all notice -server %s %s >UCRY-SYMMETRIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
+		return ''
+
+	if ircrypt_key_ex_memory[target].pub_key_send or ircrypt_key_ex_memory[target].pub_key_receive:
+		weechat.command('','/mute -all notice -server %s %s >UCRY-NO-REQUEST-FOR-SYMMETRIC-KEY' % (server, info['nick']))
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
+
+	ircrypt_key_ex_memory[target].sym_received = True
+
+	if ircrypt_key_ex_memory[target].parts == 2:
 			weechat.command('','/ircrypt set-key -server %s %s %s' % (server, info['nick'],  base64.b64encode(ircrypt_key_ex_memory[target].sym_key)))
-	else:
-		weechat.command('','/mute -all notice -server %s %s >UCRY-KEY-EX-PUB-RECEIVED-WITHOUT-PING' \
-				% (server, info['nick']))
 	return ''
 
 
@@ -971,11 +961,11 @@ def ircrypt_command_query(server, nick):
 	if gpg_id:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s' \
 				% (server, nick, gpg_id))
-		ircrypt_key_ex_memory[target] = KeyExchange(True, False)
+		ircrypt_key_ex_memory[target] = KeyExchange(False, True)
 	else:
 		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING' \
 				% (server, nick))
-		ircrypt_key_ex_memory[target] = KeyExchange(False, False)
+		ircrypt_key_ex_memory[target] = KeyExchange(True, True)
 	weechat.command('','/query -server %s %s' % (server, nick))
 	weechat.prnt(weechat.current_buffer(), 'Start key exchange with %s on server %s' % \
 			(nick, server))
@@ -1151,7 +1141,7 @@ def ircrypt_notice_hook(data, msgtype, server, args):
 	if '>KEY-EX-PONG' in args:
 		return ircrypt_receive_key_ex_pong(server, args, info)
 
-	if '>KEY-EX-NEXT-PHASE-' in args:
+	if '>KEY-EX-NEXT-PHASE' in args:
 		return ircrypt_receive_next_phase(server, args, info)
 
 	if '>KEY-EX-PUB-RECEIVED' in args:
