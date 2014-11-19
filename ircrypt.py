@@ -233,7 +233,7 @@ def ircrypt_receive_key_ex_pong(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-PONG-WITHOUT-PING' % (server, info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
 		return ''
 
 	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
@@ -276,7 +276,7 @@ def ircrypt_receive_next_phase(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-PONG-WITHOUT-PING' % (server, info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
 		return ''
 
 	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
@@ -341,7 +341,7 @@ def ircrypt_public_key_get(server, args, info):
 		# No instance of KeyExchange: Error
 		if not ircrypt_key_ex_memory.get(target):
 			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-PUBLIC-KEY-EXCHANGE-WITHOUT-PING' % (server,
+					'>UCRY-NO-KEY-EXCHANGE' % (server,
 						info['nick']))
 			return ''
 		# If no request for a public key: Error and try to delete instance of
@@ -456,7 +456,7 @@ def ircrypt_receive_key_ex_pub_received(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-KEY-EX-PUB-RECEIVED-WITHOUT-PING' % (server,
+				'>UCRY-NO-KEY-EXCHANGE' % (server,
 					info['nick']))
 
 	# Set asymmetric identifier and remember that the public key was sent
@@ -548,7 +548,7 @@ def ircrypt_sym_key_get(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-SYMMETRIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
 		return ''
 
 	# No request for symmtric key exchange: Error and try to delete instance
@@ -631,7 +631,7 @@ def ircrypt_receive_key_ex_sym_received(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-SYMMETRIC-KEY-EXCHANGE-WITHOUT-PING' % (server, info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
 		return ''
 
 	# No request for symmtric key exchange: Error and try to delete instance
