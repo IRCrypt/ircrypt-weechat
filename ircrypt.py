@@ -296,7 +296,7 @@ def ircrypt_public_key_send(server, nick):
 	'''This function send away own public key'''
 	global ircrypt_gpg_homedir, ircrypt_gpg_id, ircrypt_key_ex_memory
 
-	# Export own public key and b64encode the public key. Print error is
+	# Export own public key and b64encode the public key. Print error if
 	# necessary.
 	if ircrypt_gpg_id:
 		p = subprocess.Popen([ircrypt_gpg_binary, '--batch', '--no-tty',
@@ -336,113 +336,112 @@ def ircrypt_public_key_get(server, args, info):
 		# Add parts to current request
 		ircrypt_pub_keys_memory[target].update(int(number), message)
 		return ''
-	else:
 
-		# No instance of KeyExchange: Error
-		if not ircrypt_key_ex_memory.get(target):
-			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-NO-KEY-EXCHANGE' % (server,
-						info['nick']))
-			return ''
-		# If no request for a public key: Error and try to delete instance of
-		# KeyExchange
-		if not ircrypt_key_ex_memory[target].pub_key_receive:
-			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-NO-REQUEST-FOR-PUBLIC-KEY' % (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-			return ''
-
-		# If there is a public identifier: Error and try to delete instance of
-		# KeyExchange
-		key_id = ircrypt_asym_id.get(target)
-		if key_id:
-			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-			weechat.prnt('', 'WARNING There exist a gpg key for this user.')
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-			return ''
-
-		# Import public key
-		p = subprocess.Popen([ircrypt_gpg_binary, '--no-tty',
-			'--homedir', ircrypt_gpg_homedir, '--keyid-format', '0xlong',
-			'--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE)
-		(out, err) = p.communicate(base64.b64decode(message +
-			ircrypt_pub_keys_memory[target].message))
-
-		# Print error (There are the information about the imported public key)
-		# and quit key exchange if necessary
-		if p.returncode:
-			weechat.prnt('', '%s%s%s' %
-					(weechat.prefix('error'), weechat.color('red'), err))
-			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-			return ''
-		elif err:
-			weechat.prnt('', err)
-
-		# Try to get public key identifier.
-		try:
-			gpg_id = err.split('0x',1)[1].split(':',1)[0]
-		except:
-			weechat.prnt('', 'WARNING Unable to get key id')
-			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-			return ''
-
-		# Probe for GPG fingerprint
-		p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
-			'--batch', '--no-tty', '--quiet', '--fingerprint', '--with-colon'],
-			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		(out, err) = p.communicate()
-
-		# Print error (There are the information about the imported public key)
-		# and quit key exchange if necessary
-		if p.returncode:
-			weechat.prnt('', '%s%s%s' %
-					(weechat.prefix('error'), weechat.color('red'), err))
-			weechat.command('','/mute -all notice -server %s %s '
-					'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-			try:
-				del ircrypt_key_ex_memory[target]
-			except KeyError:
-				pass
-			return ''
-		elif err:
-			weechat.prnt('', err)
-
-		# There is a secret key
-		if out:
-			out = [ line for line in out.split('\n') \
-					if (gpg_id + ':') in line and line.startswith('fpr:') ][-1]
-			gpg_id = out.split('fpr')[-1].strip(':')
-
-		# Set asymmetric identifier and remember that the public key was received
-		ircrypt_asym_id[target.lower()] = gpg_id
-		ircrypt_key_ex_memory[target].pub_key_receive = False
-
-		# Send status back
+	# No instance of KeyExchange: Error
+	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>KEY-EX-PUB-RECEIVED' % (server, info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server,
+					info['nick']))
+		return ''
+	# If no request for a public key: Error and try to delete instance of
+	# KeyExchange
+	if not ircrypt_key_ex_memory[target].pub_key_receive:
+		weechat.command('','/mute -all notice -server %s %s '
+				'>UCRY-NO-REQUEST-FOR-PUBLIC-KEY' % (server, info['nick']))
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
 
-		# Start symmetic key exchange if public key exchange is closed
-		if (ircrypt_key_ex_memory[target].pub_key_send,
-				ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
-			ircrypt_sym_key_send(server, info['nick'])
+	# If there is a public identifier: Error and try to delete instance of
+	# KeyExchange
+	key_id = ircrypt_asym_id.get(target)
+	if key_id:
+		weechat.command('','/mute -all notice -server %s %s '
+				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
+		weechat.prnt('', 'WARNING There exist a gpg key for this user.')
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
+
+	# Import public key
+	p = subprocess.Popen([ircrypt_gpg_binary, '--no-tty',
+		'--homedir', ircrypt_gpg_homedir, '--keyid-format', '0xlong',
+		'--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+		stderr=subprocess.PIPE)
+	(out, err) = p.communicate(base64.b64decode(message +
+		ircrypt_pub_keys_memory[target].message))
+
+	# Print error (There are the information about the imported public key)
+	# and quit key exchange if necessary
+	if p.returncode:
+		weechat.prnt('', '%s%s%s' %
+				(weechat.prefix('error'), weechat.color('red'), err))
+		weechat.command('','/mute -all notice -server %s %s '
+				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
+	elif err:
+		weechat.prnt('', err)
+
+	# Try to get public key identifier.
+	try:
+		gpg_id = err.split('0x',1)[1].split(':',1)[0]
+	except:
+		weechat.prnt('', 'WARNING Unable to get key id')
+		weechat.command('','/mute -all notice -server %s %s '
+				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
+
+	# Probe for GPG fingerprint
+	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
+		'--batch', '--no-tty', '--quiet', '--fingerprint', '--with-colon'],
+		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	(out, err) = p.communicate()
+
+	# Print error (There are the information about the imported public key)
+	# and quit key exchange if necessary
+	if p.returncode:
+		weechat.prnt('', '%s%s%s' %
+				(weechat.prefix('error'), weechat.color('red'), err))
+		weechat.command('','/mute -all notice -server %s %s '
+				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
+		try:
+			del ircrypt_key_ex_memory[target]
+		except KeyError:
+			pass
+		return ''
+	elif err:
+		weechat.prnt('', err)
+
+	# There is a secret key
+	if out:
+		out = [ line for line in out.split('\n') \
+				if (gpg_id + ':') in line and line.startswith('fpr:') ][-1]
+		gpg_id = out.split('fpr')[-1].strip(':')
+
+	# Set asymmetric identifier and remember that the public key was received
+	ircrypt_asym_id[target.lower()] = gpg_id
+	ircrypt_key_ex_memory[target].pub_key_receive = False
+
+	# Send status back
+	weechat.command('','/mute -all notice -server %s %s '
+			'>KEY-EX-PUB-RECEIVED' % (server, info['nick']))
+
+	# Start symmetic key exchange if public key exchange is closed
+	if (ircrypt_key_ex_memory[target].pub_key_send,
+			ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
+		ircrypt_sym_key_send(server, info['nick'])
 
 	return ''
 
@@ -1085,7 +1084,7 @@ def ircrypt_command_remove_cip(target):
 
 
 def ircrypt_command_query(server, nick):
-	'''This function ist called when the user starts a key exchange'''
+	'''This function is called when the user starts a key exchange'''
 	global ircrypt_asym_id, ircrypt_key_ex_memory
 	target = '%s/%s' % (server, nick)
 	gpg_id = ircrypt_asym_id.get(target.lower())
@@ -1099,17 +1098,6 @@ def ircrypt_command_query(server, nick):
 		ircrypt_key_ex_memory[target] = KeyExchange(True, True)
 	weechat.command('','/query -server %s %s' % (server, nick))
 	weechat.prnt(weechat.current_buffer(), 'Start key exchange with %s on server %s' % \
-			(nick, server))
-	return weechat.WEECHAT_RC_OK
-
-
-def ircrypt_command_request_public_key(server, nick):
-	'''This function ist called when the user requests a key from another
-	user'''
-	weechat.command('','/mute -all notice -server %s %s >KEY-REQUEST' \
-			% (server, nick))
-	# Print message in ircrypt buffer, that request was declined
-	weechat.prnt('', 'Request public gpg-key from user %s on server %s' % \
 			(nick, server))
 	return weechat.WEECHAT_RC_OK
 
