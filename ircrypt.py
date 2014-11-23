@@ -153,6 +153,13 @@ def ircrypt_gnupg(stdin, *args):
 	return (p.returncode, out, err)
 
 
+def ircrypt_split_msg(cmd, pre, msg):
+	'''Convert encrypted message in MAX_PART_LEN sized blocks
+	'''
+	return '\n'.join(['%s:>%s-%i %s' % (cmd, pre, i,
+		msg[i*MAX_PART_LEN:(i+1) * MAX_PART_LEN])
+		for i in xrange(1 + (len(msg) / MAX_PART_LEN))][::-1])
+
 
 def ircrypt_decrypt_hook(data, msgtype, server, args):
 	'''Hook for incomming PRVMSG commands.
@@ -286,17 +293,8 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 		buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
-	encrypted = base64.b64encode(out)
-
-
-	# Create output
-	output = '%s:>CRY-0 %s' % (pre, encrypted)
-	# Check if encrypted message is to long.
-	# If that is the case, send multiple messages.
-	if len(output) > MAX_PART_LEN:
-		output = '%s:>CRY-1 %s\r\n%s' % (pre, output[MAX_PART_LEN:],
-				output[:MAX_PART_LEN])
-	return output
+	# Ensure the generated messages are not too long and send them
+	return ircrypt_split_msg(pre, 'CRY', base64.b64encode(out))
 
 
 def ircrypt_config_init():
