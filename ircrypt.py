@@ -1,37 +1,25 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2013-2014
+# IRCrypt: Secure Encryption Layer Atop IRC
+# =========================================
+#
+# Copyright (C) 2013-2014
 #    Lars Kiesow   <lkiesow@uos.de>
 #    Sven Haardiek <sven@haardiek.de>
-# All rights reserved.
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
 #
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 #
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in the
-#    documentation and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
-# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS
-# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-# THE POSSIBILITY OF SUCH DAMAGE.
-#
-# The views and conclusions contained in the software and documentation
-# are those of the authors and should not be interpreted as representing
-# official policies, either expressed or implied, of everyone working on
-# this project.
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #
 #
 # == About ==================================================================
@@ -58,19 +46,18 @@
 import weechat, string, os, subprocess, base64, time
 
 # Constants used in this script
-SCRIPT_NAME    = 'IRCrypt'
+SCRIPT_NAME    = 'ircrypt'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
 SCRIPT_VERSION = 'SNAPSHOT'
-SCRIPT_LICENSE = 'FreeBSD License'
+SCRIPT_LICENSE = 'GPL3'
 SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
-SCRIPT_HELP_TEXT = '''%(bold)sIRCrypt command options: %(normal)s
+SCRIPT_HELP_TEXT = '''
+%(bold)sIRCrypt command options: %(normal)s
 list                                                    List set keys, public key ids and ciphers
 set-key            [-server <server>] <target> <key>    Set key for target
 remove-key         [-server <server>] <target>          Remove key for target
-query              [-server <server>] <nick>            Start key exchange with nick
 set-cipher         [-server <server>] <target> <cipher> Set specific cipher for target
 remove-cipher      [-server <server>] <target>          Remove specific cipher for target
-remove-public-key  [-server <server>] <nick>            Remove public key id for nick
 plain              [-server <s>] [-channel <ch>] <msg>  Send unencrypted message
 
 %(bold)sExamples: %(normal)s
@@ -78,10 +65,6 @@ Set the key for a channel:
    /ircrypt set-key -server freenet #IRCrypt key
 Remove the key:
    /ircrypt remove-key #IRCrypt
-Start key exchange with a user
-   /ircrypt query nick
-Remove public key identifier for a user:
-   /ircrypt remove-public-key nick
 Switch to a specific cipher for a channel:
    /ircrypt set-cipher -server freenode #IRCrypt TWOFISH
 Unset the specific cipher for a channel:
@@ -105,9 +88,6 @@ Tip: You can list all options and what they are currently set to by executing:
    This option will set a string which is displayed before each message that is
    send unencrypted in a channel for which a key is set. So you know when
    someone is talking to you without encryption.
-%(bold)sircrypt.cipher.sym_cipher %(normal)s
-   This will set the default cipher used for symmetric encryption. You can get
-   a list of available ciphers by running “gpg --version”.
 %(bold)sircrypt.general.binary %(normal)s
    This will set the GnuPG binary used for encryption and decryption. IRCrypt
    will try to set this automatically.
@@ -124,14 +104,9 @@ ircrypt_config_file      = None
 ircrypt_config_section   = {}
 ircrypt_config_option    = {}
 ircrypt_keys             = {}
-ircrypt_asym_id          = {}
 ircrypt_cipher           = {}
-ircrypt_pub_keys_memory  = {}
-ircrypt_key_ex_memory    = {}
 ircrypt_gpg_binary       = None
 ircrypt_message_plain    = {}
-ircrypt_gpg_homedir      = None
-ircrypt_gpg_id           = None
 
 
 class MessageParts:
@@ -159,502 +134,24 @@ class MessageParts:
 		self.modified = time.time()
 
 
-class KeyExchange:
-	'''Class used for key exchange
+def ircrypt_gnupg(stdin, *args):
+	'''Try to execute gpg with given input and options.
 
-	@pub_key_receive indicates wether the public key has not yet received
-	@pub_key_send indicates wether the public key has not yet been send
-	@parts specify the number of keyparts
-	@sym_key is the symmetric key
-	@sym_received incicates wether the symmetric key is completed
+	:param stdin: Input for GnuPG
+	:param  args: Additional command line options for GnuPG
+	:returns:     Tuple containing returncode, stdout and stderr
 	'''
-
-	pub_key_receive = False
-	pub_key_send = False
-	parts = 0
-	sym_key  = ''
-	sym_received = False
-
-	def __init__(self, pub_key_receive, pub_key_send):
-		'''This function initialize the instance'''
-		self.pub_key_receive = pub_key_receive
-		self.pub_key_send = pub_key_send
-
-	def update(self, keypart):
-		'''This function update the symmetric key and do the XOR operation'''
-		if self.sym_key == '':
-			self.sym_key = keypart
-		else:
-			self.sym_key = ''.join(chr(ord(x) ^ ord(y)) for x, y in
-					zip(self.sym_key, keypart))
-
-		self.parts = self.parts + 1
-
-def ircrypt_receive_key_ex_ping(server, args, info):
-	'''This function handles incomming >KEY-EX-PING notices'''
-	global ircrypt_gpg_id, ircrypt_key_ex_memory
-
-	fingerprint = args.split('>KEY-EX-PING')[-1].lstrip(' ')
-
-	# Wrong fingerprint: Error
-	if fingerprint and fingerprint != ircrypt_gpg_id:
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-PING-WITH-INVALID-FINGERPRINT' % (server, info['nick']))
-		return ''
-
-	# Send back a >KEY-EX-PONG inclusive a fingerprint (if exist)
-	# Also create an instance of the class KeyExchange
-	target = '%s/%s' % (server, info['nick'])
-	gpg_id = ircrypt_asym_id.get(target.lower())
-	if gpg_id:
-		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG %s' \
-				% (server, info['nick'], gpg_id))
-		if fingerprint:
-			ircrypt_key_ex_memory[target] = KeyExchange(False, False)
-		else:
-			ircrypt_key_ex_memory[target] = KeyExchange(False, True)
-	else:
-		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PONG' \
-				% (server, info['nick']))
-		if fingerprint:
-			ircrypt_key_ex_memory[target] = KeyExchange(True, False)
-		else:
-			ircrypt_key_ex_memory[target] = KeyExchange(True, True)
-
-	return ''
-
-
-def ircrypt_receive_key_ex_pong(server, args, info):
-	'''This function handles incomming >KEY-EX-PONG notices'''
-	global ircrypt_gpg_id, ircrypt_key_ex_memory
-
-	target = '%s/%s' % (server, info['nick'])
-
-	# No instance of KeyExchange: Error
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
-		return ''
-
-	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
-
-	# Wrong fingerprint: Error and try to delete instance of KeyExchange
-	if fingerprint and fingerprint != ircrypt_gpg_id:
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-PING-WITH-INVALID-FINGERPRINT' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# If correct fingerprint, the public key must not been sent
-	if fingerprint:
-		ircrypt_key_ex_memory[target].pub_key_send = False
-
-	# Notice to start next phase
-	weechat.command('','/mute -all notice -server %s %s >KEY-EX-NEXT-PHASE' \
-			% (server, info['nick']))
-
-	# If no public key must be sent, start symmetric key exchange. Otherwise
-	# send public key, if necessary
-	if (ircrypt_key_ex_memory[target].pub_key_send,
-			ircrypt_key_ex_memory[target].pub_key_receive) == (False, False):
-		ircrypt_sym_key_send(server, info['nick'])
-	elif ircrypt_key_ex_memory[target].pub_key_send:
-		ircrypt_public_key_send(server, info['nick'])
-
-	return ''
-
-
-def ircrypt_receive_next_phase(server, args, info):
-	'''This function handles incomming >KEY-EX-NEXT-PHASE notices'''
-	global ircrypt_gpg_id, ircrypt_key_ex_memory
-
-	target = '%s/%s' % (server, info['nick'])
-
-	# No instance of KeyExchange: Error
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
-		return ''
-
-	fingerprint = args.split('>KEY-EX-PONG')[-1].lstrip(' ')
-
-	# If no public key must be sent, start symmetric key exchange. Otherwise
-	# send public key, if necessary
-	if (ircrypt_key_ex_memory[target].pub_key_send,
-			ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
-		ircrypt_sym_key_send(server, info['nick'])
-	elif ircrypt_key_ex_memory[target].pub_key_send:
-		ircrypt_public_key_send(server, info['nick'])
-
-	return ''
-
-
-def ircrypt_public_key_send(server, nick):
-	'''This function send away own public key'''
-	global ircrypt_gpg_homedir, ircrypt_gpg_id, ircrypt_key_ex_memory
-
-	# Export own public key and b64encode the public key. Print error if
-	# necessary.
-	if ircrypt_gpg_id:
-		p = subprocess.Popen([ircrypt_gpg_binary, '--batch', '--no-tty',
-			'--quiet', '--homedir', ircrypt_gpg_homedir,'--export',
-			ircrypt_gpg_id], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE)
-		(pub_key, err) = p.communicate()
-		if err:
-			weechat.prnt('', err)
-		pub_key = base64.b64encode(pub_key)
-
-	# Partition the public key and send it away
-	for i in range(1 + (len(pub_key) / MAX_PART_LEN))[::-1]:
-		msg = '>PUB-EX-%i %s' % (i, pub_key[i*MAX_PART_LEN:(i+1)*MAX_PART_LEN])
-		weechat.command('','/mute -all notice -server %s %s %s' % (server, nick, msg))
-
-	return ''
-
-
-def ircrypt_public_key_get(server, args, info):
-	'''This function handles incomming >PUB-EX- messages'''
-	global ircrypt_pub_keys_memory, ircrypt_asym_id, ircrypt_key_ex_memory
-
-	# Get prefix, number and message
-	pre, message    = args.split('>PUB-EX-', 1)
-	number, message = message.split(' ', 1)
-
-	target = ('%s/%s' % (server, info['nick'])).lower()
-
-	# Check if we got the last part of the message otherwise put the message
-	# into a global memory and quit
-	if int(number):
-		if not target in ircrypt_pub_keys_memory:
-			# - First element is list of requests
-			# - Second element is currently received request
-			ircrypt_pub_keys_memory[target] = MessageParts()
-		# Add parts to current request
-		ircrypt_pub_keys_memory[target].update(int(number), message)
-		return ''
-
-	# No instance of KeyExchange: Error
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server,
-					info['nick']))
-		return ''
-	# If no request for a public key: Error and try to delete instance of
-	# KeyExchange
-	if not ircrypt_key_ex_memory[target].pub_key_receive:
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-REQUEST-FOR-PUBLIC-KEY' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# If there is a public identifier: Error and try to delete instance of
-	# KeyExchange
-	key_id = ircrypt_asym_id.get(target)
-	if key_id:
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		weechat.prnt('', 'WARNING There exist a gpg key for this user.')
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# Import public key
-	p = subprocess.Popen([ircrypt_gpg_binary, '--no-tty',
-		'--homedir', ircrypt_gpg_homedir, '--keyid-format', '0xlong',
-		'--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-		stderr=subprocess.PIPE)
-	(out, err) = p.communicate(base64.b64decode(message +
-		ircrypt_pub_keys_memory[target].message))
-
-	# Print error (There are the information about the imported public key)
-	# and quit key exchange if necessary
-	if p.returncode:
-		weechat.prnt('', '%s%s%s' %
-				(weechat.prefix('error'), weechat.color('red'), err))
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-	elif err:
-		weechat.prnt('', err)
-
-	# Try to get public key identifier.
-	try:
-		gpg_id = err.split('0x',1)[1].split(':',1)[0]
-	except:
-		weechat.prnt('', 'WARNING Unable to get key id')
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# Probe for GPG fingerprint
-	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
-		'--batch', '--no-tty', '--quiet', '--fingerprint', '--with-colon'],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	(out, err) = p.communicate()
-
-	# Print error (There are the information about the imported public key)
-	# and quit key exchange if necessary
-	if p.returncode:
-		weechat.prnt('', '%s%s%s' %
-				(weechat.prefix('error'), weechat.color('red'), err))
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-	elif err:
-		weechat.prnt('', err)
-
-	# There is a secret key
-	if out:
-		out = [ line for line in out.split('\n') \
-				if (gpg_id + ':') in line and line.startswith('fpr:') ][-1]
-		gpg_id = out.split('fpr')[-1].strip(':')
-
-	# Set asymmetric identifier and remember that the public key was received
-	ircrypt_asym_id[target.lower()] = gpg_id
-	ircrypt_key_ex_memory[target].pub_key_receive = False
-
-	# Send status back
-	weechat.command('','/mute -all notice -server %s %s '
-			'>KEY-EX-PUB-RECEIVED' % (server, info['nick']))
-
-	# Start symmetic key exchange if public key exchange is closed
-	if (ircrypt_key_ex_memory[target].pub_key_send,
-			ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
-		ircrypt_sym_key_send(server, info['nick'])
-
-	return ''
-
-
-def ircrypt_receive_key_ex_pub_received(server, args, info):
-	'''This function handles incomming >PUB-KEY-RECEIVED notices'''
-	global ircrypt_gpg_id, ircrypt_key_ex_memory
-
-	target = '%s/%s' % (server, info['nick'])
-
-	# No instance of KeyExchange: Error
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server,
-					info['nick']))
-
-	# Set asymmetric identifier and remember that the public key was sent
-	ircrypt_key_ex_memory[target].pub_key_send = False
-
-	# Start symmetic key exchange if public key exchange is closed
-	if (ircrypt_key_ex_memory[target].pub_key_send,ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
-		ircrypt_sym_key_send(server, info['nick'])
-
-	return ''
-
-
-def ircrypt_sym_key_send(server, nick):
-	'''This function create a part of a symmetric key and send it away'''
-	global ircrypt_asym_id, ircrypt_key_ex_memory, ircrypt_sym_keys_memory
-
-	# Create part of key
-	keypart = os.urandom(64)
-
-	target = '%s/%s' % (server, nick)
-
-	# Encrypt (asymmetrically) and sign keypart
-	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
-		'--batch', '--no-tty', '--quiet', '-s', '--trust-model', 'always', '-e',
-		'-r', ircrypt_asym_id[target]], stdin=subprocess.PIPE,
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	(out, err) = p.communicate(keypart)
+	p = subprocess.Popen(
+			[ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet'] + list(args),
+			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	out, err = p.communicate(stdin)
 
 	# Print error and quit key exchange if necessary
 	if p.returncode:
 		weechat.prnt('', '%s%s%s' %
-				(weechat.prefix('error'), weechat.color('red'), err))
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-	elif err:
-		weechat.prnt('', err)
+			(weechat.prefix('error'), weechat.color('red'), err))
+	return (p.returncode, out, err)
 
-	# Update symmetric key
-	ircrypt_key_ex_memory[target].update(keypart)
-
-	# If symmetric key is complete, send status back
-	if ircrypt_key_ex_memory[target].parts == 2:
-		weechat.command('','/mute -all notice -server %s %s '
-				'>KEY-EX-SYM-RECEIVED' % (server, nick))
-		# If the symmetric key is also complete by the counterpart set symmetric
-		# key
-		if ircrypt_key_ex_memory[target].sym_received:
-			weechat.command('','/ircrypt set-key -server %s %s %s' \
-					% (server, info['nick'],
-						base64.b64encode(ircrypt_key_ex_memory[target].sym_key)))
-
-	# Print encrypted part of the symmetric key in multiple notices
-	out = base64.b64encode(out)
-	for i in range(1 + (len(out) / MAX_PART_LEN))[::-1]:
-		msg = '>SYM-EX-%i %s' % (i, out[i*MAX_PART_LEN:(i+1)*MAX_PART_LEN])
-		weechat.command('','/mute -all notice -server %s %s %s' % (server, nick, msg))
-
-
-def ircrypt_sym_key_get(server, args, info):
-	global ircrypt_pub_keys_memory, ircrypt_asym_id, ircrypt_key_ex_memory
-
-	# Get prefix, number and message
-	pre, message    = args.split('>SYM-EX-', 1)
-	number, message = message.split(' ', 1)
-
-	catchword = (server, info['channel'], info['nick'])
-
-	# Decrypt only if we got last part of the message
-	# otherwise put the message into a global memory and quit
-	if int(number) != 0:
-		if not catchword in ircrypt_msg_memory:
-			ircrypt_msg_memory[catchword] = MessageParts()
-		ircrypt_msg_memory[catchword].update(int(number), message)
-		return ''
-
-	# Get whole message
-	try:
-		message = message + ircrypt_msg_memory[catchword].message
-	except KeyError:
-		pass
-
-	target = ('%s/%s' % (server, info['nick'])).lower()
-
-	# No instance of KeyExchange: Error
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
-		return ''
-
-	# No request for symmtric key exchange: Error and try to delete instance
-	if (ircrypt_key_ex_memory[target].pub_key_send or
-			ircrypt_key_ex_memory[target].pub_key_receive):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-REQUEST-FOR-SYMMETRIC-KEY' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# Decode base64 encoded message
-	try:
-		message = base64.b64decode(message)
-	except TypeError:
-		weechat.prnt('', '%s%sCould not Base64 decode message.' %
-				(weechat.prefix('error'), weechat.color('red')))
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# Decrypt
-	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
-		'--batch',  '--no-tty', '--quiet', '-d'], stdin=subprocess.PIPE,
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	key, err = p.communicate(message)
-
-	# Print error and quit key exchange if necessary
-	if p.returncode:
-		weechat.prnt('', '%s%s%s' %
-				(weechat.prefix('error'), weechat.color('red'), err))
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-	elif err:
-		weechat.prnt('', err)
-
-	# Remove old messages from memory
-	try:
-		del ircrypt_msg_memory[catchword]
-	except KeyError:
-		pass
-
-	target = '%s/%s' % (server, info['nick'])
-
-	# Update symmetric key
-	ircrypt_key_ex_memory[target].update(key)
-
-	# If symmetric key is complete, send status back
-	if ircrypt_key_ex_memory[target].parts == 2:
-		weechat.command('','/mute -all notice -server %s %s '
-				'>KEY-EX-SYM-RECEIVED' % (server, info['nick']))
-
-		# If the symmetric key is also complete by the counterpart set symmetric
-		# key
-		if ircrypt_key_ex_memory[target].sym_received:
-			weechat.command('','/ircrypt set-key -server %s %s %s' \
-					% (server, info['nick'],
-						base64.b64encode(ircrypt_key_ex_memory[target].sym_key)))
-
-	return ''
-
-
-def ircrypt_receive_key_ex_sym_received(server, args, info):
-	'''This functions handles incomming >KEY-EX-SYM-RECEIVED notices'''
-	global ircrypt_gpg_id, ircrypt_key_ex_memory
-
-	target = '%s/%s' % (server, info['nick'])
-
-	# No instance of KeyExchange: Error
-	if not ircrypt_key_ex_memory.get(target):
-		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
-		return ''
-
-	# No request for symmtric key exchange: Error and try to delete instance
-	if (ircrypt_key_ex_memory[target].pub_key_send or
-			ircrypt_key_ex_memory[target].pub_key_receive):
-		weechat.command('','/mute -all notice -server %s %s'
-				'>UCRY-NO-REQUEST-FOR-SYMMETRIC-KEY' % (server, info['nick']))
-		try:
-			del ircrypt_key_ex_memory[target]
-		except KeyError:
-			pass
-		return ''
-
-	# Remember that the counterpart has received the symmetric key
-	ircrypt_key_ex_memory[target].sym_received = True
-
-	# If the symmetric key is also complete by the counterpart set symmetric
-	# key
-	if ircrypt_key_ex_memory[target].parts == 2:
-			weechat.command('','/ircrypt set-key -server %s %s %s' \
-					% (server, info['nick'],
-						base64.b64encode(ircrypt_key_ex_memory[target].sym_key)))
-
-	return ''
 
 
 def ircrypt_decrypt_hook(data, msgtype, server, args):
@@ -667,7 +164,9 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_config_option, ircrypt_keys, ircrypt_asym_id
+	global ircrypt_config_option, ircrypt_keys
+	global ircrypt_msg_memory, ircrypt_config_option
+
 
 	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
@@ -677,32 +176,18 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 
 	# Get key
 	key = ircrypt_keys.get(('%s/%s' % (server, info['channel'])).lower())
-	if key:
-		# if key exists and >CRY part of message start symmetric encryption
-		if '>CRY-' in args:
-			return ircrypt_decrypt_sym(server, args, info, key)
+
+	# Return everything as it is if we have no key
+	if not key:
+		return args
+
+	if not '>CRY-' in args:
 		# if key exisits and no >CRY not part of message flag message as unencrypted
-		else:
-			pre, message = string.split(args, ' :', 1)
-			return '%s :%s %s' % (pre,
-					weechat.config_string(ircrypt_config_option['unencrypted']),
-					message)
+		pre, message = string.split(args, ' :', 1)
+		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
+		return '%s :%s %s' % (pre, marker, message)
 
-	# If symmetric encryption return arguments
-	return args
-
-
-def ircrypt_decrypt_sym(server, args, info, key):
-	'''This method is called to decrypt an symmetric encrypted messages and put
-	them together again if necessary.
-
-	:param server: IRC server the message comes from.
-	:param args: IRC command line-
-	:param info: dictionary created by info_get_hashtable
-	:param key: key for decryption
-	'''
-	global ircrypt_msg_memory, ircrypt_config_option
-
+	# if key exists and >CRY part of message start symmetric encryption
 	pre, message    = string.split(args, '>CRY-', 1)
 	number, message = string.split(message, ' ', 1 )
 
@@ -729,20 +214,18 @@ def ircrypt_decrypt_sym(server, args, info, key):
 	# Decode base64 encoded message
 	try:
 		message = base64.b64decode(message)
-	except TypeError:
+	except:
 		weechat.prnt(buf, '%s%sCould not Base64 decode message.' %
 				(weechat.prefix('error'), weechat.color('red')))
 		return args
 
 	# Decrypt
-	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet',
-		'--passphrase-fd', '-', '-d'],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	decrypted, err = p.communicate('%s\n%s' % (key, message))
+	(ret, out, err) = ircrypt_gnupg('%s\n%s' % (key, message),
+			'--passphrase-fd', '-', '-d')
 
 	# Get and print GPG errors/warnings
 	err = '\n'.join(['  ▼ ' + line for line in err.split('\n') if line])
-	if p.returncode:
+	if ret:
 		weechat.prnt(buf, '%s%s%s' %
 				(weechat.prefix('error'), weechat.color('red'), err))
 		return args
@@ -754,7 +237,7 @@ def ircrypt_decrypt_sym(server, args, info, key):
 		del ircrypt_msg_memory[catchword]
 	except KeyError:
 		pass
-	return '%s%s' % (pre, decrypted)
+	return '%s%s' % (pre, out)
 
 
 def ircrypt_encrypt_hook(data, msgtype, server, args):
@@ -767,7 +250,7 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_keys, ircrypt_asym_id
+	global ircrypt_keys, ircrypt_cipher
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
 
 	# check if this message is to be send as plain text
@@ -784,24 +267,9 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 
 	# check symmetric key
 	key = ircrypt_keys.get(('%s/%s' % (server, info['channel'])).lower())
-	if key:
-		return ircrypt_encrypt_sym(server, args, info, key)
-
-	# No key -> don't encrypt
-	return args
-
-
-def ircrypt_encrypt_sym(server, args, info, key):
-	'''This method will symmetric encrypt messages and if necessary (if
-	they grow to large) split them into multiple parts.
-
-	:param server: IRC server the message comes from.
-	:param args: IRC command line-
-	:param info: dictionary created by info_get_hashtable
-	:param key: key for decryption
-	'''
-
-	global ircrypt_cipher
+	if not key:
+		# No key -> don't encrypt
+		return args
 
 	# Get cipher
 	cipher = ircrypt_cipher.get(('%s/%s' % (server, info['channel'])).lower(),
@@ -810,25 +278,18 @@ def ircrypt_encrypt_sym(server, args, info, key):
 	pre, message = string.split(args, ':', 1)
 
 	# encrypt message
-	p = subprocess.Popen([ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet',
-		'--symmetric', '--cipher-algo',
-		cipher,
-		'--passphrase-fd', '-'],
-		stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	p.stdin.write('%s\n' % key)
-	p.stdin.write(message)
-	p.stdin.close()
-	encrypted = base64.b64encode(p.stdout.read())
-	p.stdout.close()
+	(ret, out, err) = ircrypt_gnupg('%s\n%s' % (key, message),
+			'--symmetric', '--cipher-algo', cipher, '--passphrase-fd', '-')
 
 	# Get and print GPG errors/warnings
-	err = p.stderr.read()
-	p.stderr.close()
-	if err:
+	if ret:
 		buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
 		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
 
-	#create output
+	encrypted = base64.b64encode(out)
+
+
+	# Create output
 	output = '%s:>CRY-0 %s' % (pre, encrypted)
 	# Check if encrypted message is to long.
 	# If that is the case, send multiple messages.
@@ -894,14 +355,6 @@ def ircrypt_config_init():
 	if not ircrypt_config_section['keys']:
 		weechat.config_free(ircrypt_config_file)
 
-	# Asymmetric key identifier
-	ircrypt_config_section['asym_id'] = weechat.config_new_section(
-			ircrypt_config_file, 'asym_id', 0, 0,
-			'ircrypt_config_asym_id_read_cb', '',
-			'ircrypt_config_asym_id_write_cb', '', '', '', '', '', '', '')
-	if not ircrypt_config_section['asym_id']:
-		weechat.config_free(ircrypt_config_file)
-
 	# Special Ciphers
 	ircrypt_config_section['special_cipher'] = weechat.config_new_section(
 			ircrypt_config_file, 'special_cipher', 0, 0,
@@ -914,7 +367,6 @@ def ircrypt_config_init():
 def ircrypt_config_reload_cb(data, config_file):
 	'''Handle a reload of the configuration file.
 	'''
-	ircrypt_init()
 	return weechat.WEECHAT_CONFIG_READ_OK
 
 
@@ -937,11 +389,6 @@ def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 	'''Read elements of the key section from the configuration file.
 	'''
 	global ircrypt_keys
-
-	if not weechat.config_new_option(config_file, section_name, option_name,
-			'string', 'key', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
-		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
-
 	ircrypt_keys[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
@@ -957,43 +404,12 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 
 	return weechat.WEECHAT_RC_OK
 
-def ircrypt_config_asym_id_read_cb(data, config_file, section_name, option_name,
-		value):
-	'''Read elements of the key section from the configuration file.
-	'''
-	global ircrypt_asym_id
-
-	if not weechat.config_new_option(config_file, section_name, option_name,
-			'string', 'asym_id', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
-		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
-
-	ircrypt_asym_id[option_name.lower()] = value
-	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
-
-
-def ircrypt_config_asym_id_write_cb(data, config_file, section_name):
-	'''Write passphrases to the key section of the configuration file.
-	'''
-	global ircrypt_asym_id
-
-	weechat.config_write_line(config_file, section_name, '')
-	for target, asym_id in sorted(ircrypt_asym_id.iteritems()):
-		weechat.config_write_line(config_file, target.lower(), asym_id)
-
-	return weechat.WEECHAT_RC_OK
-
 
 def ircrypt_config_special_cipher_read_cb(data, config_file, section_name,
 		option_name, value):
 	'''Read elements of the key section from the configuration file.
 	'''
 	global ircrypt_cipher
-
-	if not weechat.config_new_option(config_file, section_name, option_name,
-			'string', 'special_cipher', '', 0, 0, '', value, 0, '', '', '', '',
-			'', ''):
-		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
-
 	ircrypt_cipher[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
@@ -1021,10 +437,6 @@ def ircrypt_command_list():
 	weechat.prnt(buffer,'\nKeys:')
 	for servchan,key in ircrypt_keys.iteritems():
 		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), key))
-
-	weechat.prnt(buffer,'\nAsymmetric identifier:')
-	for servchan,ids in ircrypt_asym_id.iteritems():
-		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), ids))
 
 	weechat.prnt(buffer,'\nSpecial Cipher:')
 	for servchan,spcip in ircrypt_cipher.iteritems():
@@ -1068,6 +480,7 @@ def ircrypt_command_set_cip(target, cipher):
 	weechat.prnt(weechat.current_buffer(),'Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
 
+
 def ircrypt_command_remove_cip(target):
 	'''ircrypt command to remove key for target (target is a server/channel combination)'''
 	global ircrypt_cipher
@@ -1083,60 +496,33 @@ def ircrypt_command_remove_cip(target):
 	return weechat.WEECHAT_RC_OK
 
 
-def ircrypt_command_query(server, nick):
-	'''This function is called when the user starts a key exchange'''
-	global ircrypt_asym_id, ircrypt_key_ex_memory
-	target = '%s/%s' % (server, nick)
-	gpg_id = ircrypt_asym_id.get(target.lower())
-	if gpg_id:
-		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s' \
-				% (server, nick, gpg_id))
-		ircrypt_key_ex_memory[target] = KeyExchange(False, True)
+def ircrypt_command_plain(buffer, server, args, argv):
+	'''Send unencrypted message
+	'''
+	channel = ''
+	if (len(argv) > 2 and argv[1] == '-channel'):
+		channel = argv[2]
+		args = (args.split(' ', 2)+[''])[2]
 	else:
-		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING' \
-				% (server, nick))
-		ircrypt_key_ex_memory[target] = KeyExchange(True, True)
-	weechat.command('','/query -server %s %s' % (server, nick))
-	weechat.prnt(weechat.current_buffer(), 'Start key exchange with %s on server %s' % \
-			(nick, server))
-	return weechat.WEECHAT_RC_OK
-
-
-def ircrypt_command_remove_public_key(target):
-	'''ircrypt command to remove public key for target (target is a server/channel combination)'''
-	global ircrypt_asym_id
-	# Get buffer
-	buffer = weechat.current_buffer()
-	# Check if public key is set and print error in current buffer otherwise
-	if target.lower() not in ircrypt_asym_id:
-		weechat.prnt(buffer, 'No existing public key for %s.' % target)
+		# Try to determine the server automatically
+		channel = weechat.buffer_get_string(buffer, 'localvar_channel')
+	# If there is no text, just ignore the command
+	if not args:
 		return weechat.WEECHAT_RC_OK
-	# Delete public key (first in gpg then in config file) and print status message in current buffer
-	p = subprocess.Popen([ircrypt_gpg_binary, '--batch', '--yes', '--no-tty',
-		'--quiet', '--homedir', ircrypt_gpg_homedir,'--delete-key',
-		ircrypt_asym_id[target.lower()]], stdin=subprocess.PIPE,
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	(out, err) = p.communicate()
-	if p.returncode:
-		weechat.prnt(buffer, 'Could not delete public key in gpg')
-	del ircrypt_asym_id[target.lower()]
-	weechat.prnt(buffer, 'Removed asymmetric identifier for %s' % target)
+	marker = weechat.config_string(ircrypt_config_option['unencrypted'])
+	msg = marker + ' ' + args.split(' ', 1)[-1]
+	ircrypt_message_plain['%s/%s' % (server, channel)] = (time.time(), msg)
+	weechat.command('','/msg -server %s %s %s' % \
+			(server, channel, msg))
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command(data, buffer, args):
-	'''Hook to handle the /ircrypt weechat command. This method is also used for
-	all commands typed into the IRCrypt buffer.
+	'''Hook to handle the /ircrypt weechat command.
 	'''
 	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
 
 	argv = [a for a in args.split(' ') if a]
-
-	if argv and not argv[0] in ['list', 'set-key', 'remove-key',
-			'remove-public-key', 'set-cipher', 'remove-cipher', 'plain', 'query']:
-		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
-				weechat.prefix('error'))
-		return weechat.WEECHAT_RC_OK
 
 	# list
 	if not argv or argv == ['list']:
@@ -1145,9 +531,8 @@ def ircrypt_command(data, buffer, args):
 	# Check if a server was set
 	if (len(argv) > 2 and argv[1] == '-server'):
 		server = argv[2]
-		del argv[2]
-		del argv[1]
-		args = args.split(' ', 2)[-1]
+		del argv[1:3]
+		args = (args.split(' ', 2)+[''])[2]
 	else:
 		# Try to determine the server automatically
 		server = weechat.buffer_get_string(buffer, 'localvar_server')
@@ -1159,68 +544,43 @@ def ircrypt_command(data, buffer, args):
 		return weechat.WEECHAT_RC_ERROR
 
 	if argv[:1] == ['plain']:
-		channel = ''
-		if (len(argv) > 2 and argv[1] == '-channel'):
-			channel = argv[2]
-			del argv[2]
-			del argv[1]
-			args = args.split(' ', 2)[-1]
-		else:
-			# Try to determine the server automatically
-			channel = weechat.buffer_get_string(buffer, 'localvar_channel')
-		# If there is no text, just ignore the command
-		if len(argv) < 2:
-			return weechat.WEECHAT_RC_OK
-		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
-		msg = marker + ' ' + args.split(' ', 1)[-1]
-		ircrypt_message_plain['%s/%s' % (server, channel)] = (time.time(), msg)
-		weechat.command('','/msg -server %s %s %s' % \
-				(server, channel, msg))
+		return ircrypt_command_plain(buffer, server, args, argv)
+
+	try:
+		target = '%s/%s' % (server, argv[1])
+	except:
+		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
+				weechat.prefix('error'))
 		return weechat.WEECHAT_RC_OK
 
-	# For the remaining commands we need at least one additional argument
-	if len(argv) < 2:
-		return weechat.WEECHAT_RC_ERROR
-
-	target = '%s/%s' % (server, argv[1])
-
-	if argv[0] == 'query':
-		if len(argv) == 2:
-			return ircrypt_command_query(server, argv[1])
-		return weechat.WEECHAT_RC_ERROR
-
 	# Set keys
-	if argv[0] == 'set-key':
+	if argv[:1] == ['set-key']:
 		if len(argv) < 3:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_set_keys(target, ' '.join(argv[2:]))
 
 	# Remove keys
-	if argv[0] == 'remove-key':
+	if argv[:1] == ['remove-key']:
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_keys(target)
 
-	# Remove public key from another user
-	if argv[0] == 'remove-public-key':
-		if len(argv) != 2:
-			return weechat.WEECHAT_RC_ERROR
-		return ircrypt_command_remove_public_key(target)
-
 	# Set special cipher for channel
-	if argv[0] == 'set-cipher':
+	if argv[:1] == ['set-cipher']:
 		if len(argv) < 3:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_set_cip(target, ' '.join(argv[2:]))
 
 	# Remove secial cipher for channel
-	if argv[0] == 'remove-cipher':
+	if argv[:1] == ['remove-cipher']:
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_cip(target)
 
-	# Error if command was unknown
-	return weechat.WEECHAT_RC_ERROR
+
+	weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
+				weechat.prefix('error'))
+	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_encryption_statusbar(*args):
@@ -1243,39 +603,6 @@ def ircrypt_encryption_statusbar(*args):
 	return weechat.config_string(ircrypt_config_option['encrypted']).replace(
 			'{{cipher}}', ircrypt_cipher.get(('%s/%s' % (server, channel)).lower(),
 				weechat.config_string(ircrypt_config_option['sym_cipher'])))
-
-
-def ircrypt_notice_hook(data, msgtype, server, args):
-
-	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
-
-	# Check for error messages
-	if '>UCRY-' in args:
-		# TODO: Add error handler
-		return args
-
-	if '>KEY-EX-PING' in args:
-		return ircrypt_receive_key_ex_ping(server, args, info)
-
-	if '>KEY-EX-PONG' in args:
-		return ircrypt_receive_key_ex_pong(server, args, info)
-
-	if '>KEY-EX-NEXT-PHASE' in args:
-		return ircrypt_receive_next_phase(server, args, info)
-
-	if '>KEY-EX-PUB-RECEIVED' in args:
-		return ircrypt_receive_key_ex_pub_received(server, args, info)
-
-	if '>SYM-EX-' in args:
-		return ircrypt_sym_key_get(server, args, info)
-
-	if '>KEY-EX-SYM-RECEIVED' in args:
-		return  ircrypt_receive_key_ex_sym_received(server, args, info)
-
-	if '>PUB-EX-' in args:
-		return ircrypt_public_key_get(server, args, info)
-
-	return args
 
 
 def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
@@ -1313,80 +640,6 @@ def ircrypt_check_binary():
 			weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
 
 
-def ircrypt_init():
-	global ircrypt_gpg_homedir, ircrypt_gpg_id
-	# This should usually be ~/.weechat/ircrypt
-	ircrypt_gpg_homedir = '%s/ircrypt' % weechat.info_get("weechat_dir", "")
-	# make sure only the current user has access
-	oldmask = os.umask(077)
-	try:
-		os.mkdir(ircrypt_gpg_homedir)
-	except OSError:
-		pass
-	os.umask(oldmask)
-
-	# Probe for GPG key
-	p = subprocess.Popen([ircrypt_gpg_binary, '--homedir', ircrypt_gpg_homedir,
-		'--batch', '--no-tty', '--quiet', '--list-secret-keys',
-		'--with-fingerprint', '--with-colon'], stdin=subprocess.PIPE,
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	(out, err) = p.communicate()
-
-
-	# There is a secret key
-	if out:
-		try:
-			ircrypt_gpg_id = out.split('fpr')[-1].split('\n')[0].strip(':')
-			weechat.prnt('', 'IRCrypt: Found private gpg key with id %s' % ircrypt_gpg_id)
-			return weechat.WEECHAT_RC_OK
-		except:
-			weechat.prnt('', '%sIRCrypt: Unable to get key id', weechat.prefix('error'))
-
-	# Try to generate a key
-	weechat.prnt('', '%sIRCrypt Notice:%s' % \
-			(weechat.color('bold'), weechat.color('-bold')))
-	weechat.prnt('', 'No private key for assymetric encryption was found in the '
-			+ 'IRCrypt GPG keyring. IRCrypt will now try to automatically generate a '
-			+ 'new key. This might take quite some time as this procedure depends on '
-			+ 'the gathering of enough entropy for generating cryptographically '
-			+ 'strong random numbers. You cannot use the asymmetric encryption '
-			+ '(private chat encryption) until this process is done. However, it does '
-			+ 'not affect the symmetric encryption which can already be used. You '
-			+ 'will be notified once the process is done.')
-	hook = weechat.hook_process_hashtable(ircrypt_gpg_binary, {
-		'stdin': '1',
-		'arg1': '--batch',
-		'arg2': '--no-tty',
-		'arg3': '--quiet',
-		'arg4': '--homedir',
-		'arg5': ircrypt_gpg_homedir,
-		'arg6': '--gen-key'},
-		0, 'ircrypt_key_generated_cb', '')
-	gen_command = 'Key-Type: RSA\n' \
-			+ 'Key-Length: 2048\n' \
-			+ 'Subkey-Type: RSA\n' \
-			+ 'Subkey-Length: 2048\n' \
-			+ 'Name-comment: ircrypt\n' \
-			+ 'Expire-Date: 0\n' \
-			+ '%commit'
-
-	weechat.hook_set(hook, 'stdin', gen_command)
-	weechat.hook_set(hook, 'stdin_close', '')
-	return weechat.WEECHAT_RC_OK
-
-def ircrypt_key_generated_cb(data, command, errorcode, out, err):
-	if errorcode:
-		weechat.prnt('','%sIRCrypt: Could not generate key' % \
-				weechat.prefix('error'))
-		return weechat.WEECHAT_RC_OK
-
-	weechat.prnt('', '%sIRCrypt Notice:%s' % \
-			(weechat.color('bold'), weechat.color('-bold')))
-	weechat.prnt('', 'A private key for assymetric encryption was successfully'
-			+ 'generated and can now be used for communication.')
-	return ircrypt_init()
-
-
 # register plugin
 if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
@@ -1397,27 +650,21 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	if ircrypt_gpg_binary:
 		weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
 		weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
-		weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
 
 		weechat.hook_command('ircrypt', 'Commands to manage IRCrypt options and execute IRCrypt commands',
 				'[list]'
 				'| set-key [-server <server>] <target> <key> '
 				'| remove-key [-server <server>] <target> '
-				'| remove-public-key [-server <server>] <nick> '
 				'| set-cipher [-server <server>] <target> <cipher> '
 				'| remove-cipher [-server <server>] <target> '
-				'| query [-server <server>] <nick> '
 				'| plain [-server <server>] [-channel <channel>] <message>',
 				SCRIPT_HELP_TEXT,
 				'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
 				'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-				'|| query %(nicks) -server %(irc_servers)'
-				'|| remove-public-key %(nicks)|-server %(irc_servers) %- '
 				'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
 				'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
 				'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
 				'ircrypt_command', '')
-		ircrypt_init()
 		weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
 		weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
 
