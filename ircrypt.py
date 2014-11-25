@@ -145,11 +145,6 @@ def ircrypt_gnupg(stdin, *args):
 			[ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet'] + list(args),
 			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate(stdin)
-
-	# Print error and quit key exchange if necessary
-	if p.returncode:
-		weechat.prnt('', '%s%s%s' %
-			(weechat.prefix('error'), weechat.color('red'), err))
 	return (p.returncode, out, err)
 
 
@@ -159,6 +154,29 @@ def ircrypt_split_msg(cmd, pre, msg):
 	return '\n'.join(['%s:>%s-%i %s' % (cmd, pre, i,
 		msg[i*MAX_PART_LEN:(i+1) * MAX_PART_LEN])
 		for i in xrange(1 + (len(msg) / MAX_PART_LEN))][::-1])
+
+
+def ircrypt_error(msg, buf):
+	'''Print errors to a given buffer. Errors are printed in red and have the
+	weechat error prefix.
+	'''
+	weechat.prnt(buf, weechat.prefix('error') + weechat.color('red') + msg)
+
+
+def ircrypt_warn(msg, buf=''):
+	'''Print warnings. If no buffer is set, the default weechat buffer is used.
+	Warnin are printed in gray without marker.
+	'''
+	weechat.prnt(buf, weechat.color('gray') + msg)
+
+
+def ircrypt_info(msg, buf=None):
+	'''Print ifo message to specified buffer. If no buffer is set, the current
+	foreground buffer is used to print the message.
+	'''
+	if buf is None:
+		buf = weechat.current_buffer()
+	weechat.prnt(buf, msg)
 
 
 def ircrypt_decrypt_hook(data, msgtype, server, args):
@@ -212,6 +230,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	# Get whole message
 	try:
 		message = message + ircrypt_msg_memory[catchword].message
+		del ircrypt_msg_memory[catchword]
 	except KeyError:
 		pass
 
@@ -222,8 +241,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	try:
 		message = base64.b64decode(message)
 	except:
-		weechat.prnt(buf, '%s%sCould not Base64 decode message.' %
-				(weechat.prefix('error'), weechat.color('red')))
+		ircrypt_error('Could not Base64 decode message.', buf)
 		return args
 
 	# Decrypt
@@ -231,20 +249,13 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 			'--passphrase-fd', '-', '-d')
 
 	# Get and print GPG errors/warnings
-	err = '\n'.join(['  ▼ ' + line for line in err.split('\n') if line])
 	if ret:
-		weechat.prnt(buf, '%s%s%s' %
-				(weechat.prefix('error'), weechat.color('red'), err))
+		ircrypt_error(err, buf)
 		return args
-	elif err:
-		weechat.prnt(buf, '%s%s' % (weechat.color('gray'), err))
+	if err:
+		ircrypt_warn(err)
 
-	# Remove old messages from memory
-	try:
-		del ircrypt_msg_memory[catchword]
-	except KeyError:
-		pass
-	return '%s%s' % (pre, out)
+	return pre + out
 
 
 def ircrypt_encrypt_hook(data, msgtype, server, args):
@@ -291,7 +302,10 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 	# Get and print GPG errors/warnings
 	if ret:
 		buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
-		weechat.prnt(buf, 'GPG reported error:\n%s' % err)
+		ircrypt_error(err, buf)
+		return args
+	if err:
+		ircrypt_warn(err)
 
 	# Ensure the generated messages are not too long and send them
 	return ircrypt_split_msg(pre, 'CRY', base64.b64encode(out))
@@ -450,22 +464,20 @@ def ircrypt_command_set_keys(target, key):
 	# Set key
 	ircrypt_keys[target.lower()] = key
 	# Print status message to current buffer
-	weechat.prnt(weechat.current_buffer(),'Set key for %s' % target)
+	ircrypt_info('Set key for %s' % target)
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command_remove_keys(target):
 	'''ircrypt command to remove key for target (target is a server/channel combination)'''
 	global ircrypt_keys
-	# Get buffer
-	buffer = weechat.current_buffer()
-	# Check if key is set and print error in current buffer otherwise
+	# Check if key is set
 	if target.lower() not in ircrypt_keys:
-		weechat.prnt(buffer, 'No existing key for %s.' % target)
-		return weechat.WEECHAT_RC_OK
-	# Delete key and print status message in current buffer
-	del ircrypt_keys[target.lower()]
-	weechat.prnt(buffer, 'Removed key for %s' % target)
+		ircrypt_info('No existing key for %s.' % target)
+	else:
+		# Delete key and print status message in current buffer
+		del ircrypt_keys[target.lower()]
+		ircrypt_info('Removed key for %s' % target)
 	return weechat.WEECHAT_RC_OK
 
 
@@ -475,22 +487,20 @@ def ircrypt_command_set_cip(target, cipher):
 	# Set special cipher
 	ircrypt_cipher[target.lower()] = cipher
 	# Print status message in current buffer
-	weechat.prnt(weechat.current_buffer(),'Set cipher %s for %s' % (cipher, target))
+	ircrypt_info('Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command_remove_cip(target):
 	'''ircrypt command to remove key for target (target is a server/channel combination)'''
 	global ircrypt_cipher
-	# Get buffer
-	buffer = weechat.current_buffer()
-	# Check if special cipher is set and print error in current buffer otherwise
+	# Check if special cipher is set
 	if target.lower() not in ircrypt_cipher:
-		weechat.prnt(buffer, 'No special cipher set for %s.' % target)
-		return weechat.WEECHAT_RC_OK
-	# Delete special cipher and print status message in current buffer
-	del ircrypt_cipher[target.lower()]
-	weechat.prnt(buffer, 'Removed special cipher. Use default cipher for %s instead.' % target)
+		ircrypt_info('No special cipher set for %s.' % target)
+	else:
+		# Delete special cipher and print status message in current buffer
+		del ircrypt_cipher[target.lower()]
+		ircrypt_info('Removed special cipher. Using default cipher for %s instead.' % target)
 	return weechat.WEECHAT_RC_OK
 
 
@@ -537,8 +547,7 @@ def ircrypt_command(data, buffer, args):
 
 	# All remaining commands need a server name
 	if not server:
-		# if no server was set print message in ircrypt buffer and throw error
-		weechat.prnt(buffer, 'Unknown Server. Please use -server to specify server')
+		ircrypt_error('Unknown Server. Please use -server to specify server', buffer)
 		return weechat.WEECHAT_RC_ERROR
 
 	if argv[:1] == ['plain']:
@@ -547,8 +556,7 @@ def ircrypt_command(data, buffer, args):
 	try:
 		target = '%s/%s' % (server, argv[1])
 	except:
-		weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
-				weechat.prefix('error'))
+		ircrypt_error('Unknown command. Try  /help ircrypt', buffer)
 		return weechat.WEECHAT_RC_OK
 
 	# Set keys
@@ -576,8 +584,7 @@ def ircrypt_command(data, buffer, args):
 		return ircrypt_command_remove_cip(target)
 
 
-	weechat.prnt(buffer, '%sUnknown command. Try  /help ircrypt' % \
-				weechat.prefix('error'))
+	ircrypt_error('Unknown command. Try  /help ircrypt', buffer)
 	return weechat.WEECHAT_RC_OK
 
 
@@ -629,12 +636,12 @@ def ircrypt_check_binary():
 	if not ircrypt_gpg_binary:
 		ircrypt_gpg_binary,version = ircrypt_find_gpg_binary(('gpg','gpg2'))
 		if not ircrypt_gpg_binary:
-			weechat.prnt('', '%sAutomatic detection of the GnuPG binary failed and '
+			ircrypt_error('Automatic detection of the GnuPG binary failed and '
 					'nothing is set manually. You wont be able to use IRCrypt like '
 					'this. Please install GnuPG or set the path to the binary to '
-					'use.' % weechat.prefix('error'))
+					'use.', '')
 		else:
-			weechat.prnt('', 'Found %s' % version)
+			ircrypt_info('Found %s' % version, '')
 			weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
 
 
