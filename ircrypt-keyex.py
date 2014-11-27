@@ -1037,13 +1037,29 @@ def ircrypt_notice_hook(data, msgtype, server, args):
 
 	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
-	# Check for error messages
-	if '>UCRY-' in args:
-		# TODO: Add error handler
-		return args
-
+	if '>UCRY-INTERNAL-ERROR' in args:
+		ircrypt_error('%s on server %s reported an error during the key exchange' \
+				% (info['nick'], server), weechat.current_buffer())
+		return ''
+	elif '>UCRY-NO-KEY-EXCHANGE' in args:
+		ircrypt_error('%s on server %s reported an error during the key exchange' \
+				% (info['nick'], server), weechat.current_buffer())
+		return ''
+	elif '>UCRY-PING-WITH-INVALID-FINGERPRINT' in args:
+		ircrypt_error('%s on server %s reported that your fingerprint known does'
+				'not match his own fingerprint' % (info['nick'], server),
+				weechat.current_buffer())
+		return ''
+	elif '>UCRY-NO-REQUEST-FOR-PUBLIC-KEY' in args:
+		ircrypt_error('%s on server %s reported an error during the key exchange' \
+				% (info['nick'], server), weechat.current_buffer())
+		return ''
+	elif '>UCRY-NO-REQUEST-FOR-SYMMETRIC-KEY' in args:
+		ircrypt_error('%s on server %s reported an error during the key exchange' \
+				% (info['nick'], server), weechat.current_buffer())
+		return ''
 	# Different hooks
-	if '>KEY-EX-PING' in args:
+	elif '>KEY-EX-PING' in args:
 		return ircrypt_receive_key_ex_ping(server, args, info)
 	elif '>KEY-EX-PONG' in args:
 		return ircrypt_receive_key_ex_pong(server, args, info)
