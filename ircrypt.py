@@ -248,7 +248,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 
 	# Decrypt
 	(ret, out, err) = ircrypt_gnupg('%s\n%s' % (key, message),
-			'--passphrase-fd', '-', '-d')
+			'--passphrase-fd', '-', '-q', '-d')
 
 	# Get and print GPG errors/warnings
 	if ret:
