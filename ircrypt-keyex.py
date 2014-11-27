@@ -154,7 +154,7 @@ def ircrypt_gnupg(stdin, *args):
 	:returns:     Tuple containing returncode, stdout and stderr
 	'''
 	p = subprocess.Popen(
-			[ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet'] + list(args),
+			[ircrypt_gpg_binary, '--batch',  '--no-tty'] + list(args),
 			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate(stdin)
 	return (p.returncode, out, err)
@@ -498,8 +498,7 @@ def ircrypt_public_key_get(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server,
-					info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
 		return ''
 
 	# If no request for a public key: Error and try to delete instance of
@@ -531,7 +530,7 @@ def ircrypt_public_key_get(server, args, info):
 	# Get whole message
 	try:
 		message = message + ircrypt_pub_keys_memory[target].message
-		del ircrypt_pub_key_memory[target]
+		del ircrypt_pub_keys_memory[target]
 	except KeyError:
 		pass
 
@@ -565,6 +564,8 @@ def ircrypt_public_key_get(server, args, info):
 		return ''
 	elif err:
 		ircrypt_warn(err)
+
+        weechat.prnt('', out)
 
 	# Try to get public key identifier.
 	try:
@@ -637,14 +638,15 @@ def ircrypt_receive_key_ex_pub_received(server, args, info):
 	# No instance of KeyExchange: Error
 	if not ircrypt_key_ex_memory.get(target):
 		weechat.command('','/mute -all notice -server %s %s '
-				'>UCRY-NO-KEY-EXCHANGE' % (server,
-					info['nick']))
+				'>UCRY-NO-KEY-EXCHANGE' % (server, info['nick']))
+		return ''
 
 	# Set asymmetric identifier and remember that the public key was sent
 	ircrypt_key_ex_memory[target].pub_key_send = False
 
 	# Start symmetic key exchange if public key exchange is closed
-	if (ircrypt_key_ex_memory[target].pub_key_send,ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
+	if (ircrypt_key_ex_memory[target].pub_key_send,
+			ircrypt_key_ex_memory[target].pub_key_receive) == (False,False):
 		ircrypt_sym_key_send(server, info['nick'])
 
 	return ''
@@ -754,8 +756,8 @@ def ircrypt_sym_key_get(server, args, info):
 		return ''
 
 	# Decrypt
-	(ret, out, err) = ircrypt_gnupg(message, '--homedir', ircrypt_gpg_homedir,
-			'-d')
+        (ret, out, err) = ircrypt_gnupg(message, '--homedir',
+                ircrypt_gpg_homedir,'--trust-model', 'always', '-d')
 
 	# Print error and quit key exchange if necessary
 	if ret:
@@ -914,7 +916,7 @@ def ircrypt_command_list():
 	global ircrypt_asym_id
 
 	# Collect fingerprints
-	out = None
+	out = ''
 	for servchan,ids in ircrypt_asym_id.iteritems():
 		out = out + '%s : %s\n' % (servchan.lower(), ids)
 
@@ -953,7 +955,7 @@ def ircrypt_command_start(server, nick):
 		ircrypt_key_ex_memory[target] = KeyExchange(True, True)
 
 	# print information
-	ircrypt.info('Start key exchange with %s on server %s' % (nick, server))
+	ircrypt_info('Start key exchange with %s on server %s' % (nick, server))
 
 	return weechat.WEECHAT_RC_OK
 
