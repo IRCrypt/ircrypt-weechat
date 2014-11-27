@@ -866,6 +866,7 @@ def ircrypt_config_read():
 	''' Read IRCrypt configuration file (ircrypt.conf).
 	'''
 	global ircrypt_config_file
+
 	return weechat.config_read(ircrypt_config_file)
 
 
@@ -881,10 +882,6 @@ def ircrypt_config_asym_id_read_cb(data, config_file, section_name, option_name,
 	'''Read elements of the key section from the configuration file.
 	'''
 	global ircrypt_asym_id
-
-	if not weechat.config_new_option(config_file, section_name, option_name,
-			'string', 'asym_id', '', 0, 0, '', value, 0, '', '', '', '', '', ''):
-		return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
 
 	ircrypt_asym_id[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
