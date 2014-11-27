@@ -324,7 +324,13 @@ def ircrypt_receive_key_ex_ping(server, args, info):
 		return ''
 
 	# Get fingerprint from message
-	fingerprint = args.split('>KEY-EX-PING')[-1].lstrip(' ')
+	try:
+		fingerprint = args.split('>KEY-EX-PING')[-1].split(' (')[0].lstrip(' ')
+	except:
+		ircrypt_error('Error in IRCrypt key exchange', weechat.current_buffer())
+		weechat.command('','/mute -all notice -server %s %s '
+				'>UCRY-INTERNAL-ERROR' % (server, info['nick']))
+		return ''
 
 	# Wrong fingerprint: Error
 	if fingerprint and fingerprint != ircrypt_gpg_id:
@@ -744,7 +750,7 @@ def ircrypt_sym_key_get(server, args, info):
 
 	# Decrypt
         (ret, out, err) = ircrypt_gnupg(message, '--homedir',
-                ircrypt_gpg_homedir,'--trust-model', 'always', '-d')
+                ircrypt_gpg_homedir, '-d')
 
 	# Print error and quit key exchange if necessary
 	if ret:
@@ -756,8 +762,6 @@ def ircrypt_sym_key_get(server, args, info):
 		except KeyError:
 			pass
 		return ''
-	elif err:
-		ircrypt_warn(err)
 
 	# Remove old messages from memory
 	try:
@@ -932,17 +936,22 @@ def ircrypt_command_start(server, nick):
 	# KeyExchange
 	target = '%s/%s' % (server, nick)
 	gpg_id = ircrypt_asym_id.get(target.lower())
+	text = '(This is a message to start a key exchange via the IRCrypt addon' \
+			'IRCrypt-KeyEx. To do so you have to install IRCrypt-KeyEx)'
 	if gpg_id:
-		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s' \
-				% (server, nick, gpg_id))
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s %s' \
+				% (server, nick, gpg_id, text))
 		ircrypt_key_ex_memory[target] = KeyExchange(False, True)
 	else:
-		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING' \
-				% (server, nick))
+		weechat.command('','/mute -all notice -server %s %s >KEY-EX-PING %s' \
+				% (server, nick, text))
 		ircrypt_key_ex_memory[target] = KeyExchange(True, True)
 
 	# print information
-	ircrypt_info('Start key exchange with %s on server %s' % (nick, server))
+	ircrypt_info('Start key exchange with %s on server %s. This may take some '
+			'time, because there are many messages to exchange. You will also not '
+			'get a feedback if %s did not install the addon IRCrypt-KeyEx.' \
+			% (nick,	server, nick))
 
 	return weechat.WEECHAT_RC_OK
 
