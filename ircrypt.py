@@ -162,14 +162,16 @@ def ircrypt_error(msg, buf):
 	'''Print errors to a given buffer. Errors are printed in red and have the
 	weechat error prefix.
 	'''
-	weechat.prnt(buf, weechat.prefix('error') + weechat.color('red') + msg)
+	weechat.prnt(buf, weechat.prefix('error') + weechat.color('red') +
+			('\n' + weechat.color('red')).join(msg.split('\n')))
 
 
 def ircrypt_warn(msg, buf=''):
 	'''Print warnings. If no buffer is set, the default weechat buffer is used.
 	Warnin are printed in gray without marker.
 	'''
-	weechat.prnt(buf, weechat.color('gray') + msg)
+	weechat.prnt(buf, weechat.color('gray') +
+			('\n' + weechat.color('gray')).join(msg.split('\n')))
 
 
 def ircrypt_info(msg, buf=None):
