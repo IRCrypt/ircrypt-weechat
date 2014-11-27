@@ -48,7 +48,7 @@ import weechat, string, os, subprocess, base64, time
 # Constants used in this script
 SCRIPT_NAME    = 'ircrypt'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
-SCRIPT_VERSION = 'SNAPSHOT'
+SCRIPT_VERSION = '1.0-beta1'
 SCRIPT_LICENSE = 'GPL3'
 SCRIPT_DESC    = 'IRCrypt: Encryption layer for IRC'
 SCRIPT_HELP_TEXT = '''

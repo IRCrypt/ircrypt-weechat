@@ -52,7 +52,7 @@ sys.dont_write_bytecode = True
 # Constants used in this script
 SCRIPT_NAME    = 'ircrypt-keyex'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
-SCRIPT_VERSION = 'SNAPSHOT'
+SCRIPT_VERSION = '1.0-beta1'
 SCRIPT_LICENSE = 'GLP3'
 SCRIPT_DESC    = 'IRCrypt-KeyEx: Addon for IRCrypt to enable key exchange via public key authentication'
 SCRIPT_HELP_TEXT = '''%(bold)sIRCrypt-KeyEx command options: %(normal)s
