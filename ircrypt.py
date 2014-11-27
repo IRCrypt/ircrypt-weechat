@@ -144,7 +144,7 @@ def ircrypt_gnupg(stdin, *args):
 	if not gnupg:
 		return (99, '', 'GnuPG could not be found')
 	p = subprocess.Popen(
-			[gnupg, '--batch',  '--no-tty', '--quiet'] + list(args),
+			[gnupg, '--batch',  '--no-tty'] + list(args),
 			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate(stdin)
 	return (p.returncode, out, err)
@@ -248,7 +248,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 
 	# Decrypt
 	(ret, out, err) = ircrypt_gnupg('%s\n%s' % (key, message),
-			'--passphrase-fd', '-', '-d')
+			'--passphrase-fd', '-', '-q', '-d')
 
 	# Get and print GPG errors/warnings
 	if ret:
