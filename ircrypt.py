@@ -646,8 +646,9 @@ def ircrypt_check_binary():
 
 
 # register plugin
-if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
-		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
+if __name__ == '__main__' and weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR,
+		SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, 'ircrypt_unload_script',
+		'UTF-8'):
 	# register the modifiers
 	ircrypt_config_init()
 	ircrypt_config_read()

@@ -44,7 +44,8 @@
 #
 
 
-import weechat, string, os, subprocess, base64, time
+import weechat, string, os, subprocess, base64, time, imp
+ircrypt = None
 
 # Constants used in this script
 SCRIPT_NAME    = 'ircrypt-keyex'
@@ -191,20 +192,6 @@ def ircrypt_info(msg, buf=None):
 	weechat.prnt(buf, msg)
 
 
-def ircrypt_check_ircrypt():
-	'''Check for IRCrypt plugin
-	Return: True (found) or False (not found)'''
-	infolist = weechat.infolist_get('python_script', '', 'ircrypt')
-	weechat.infolist_next(infolist)
-	if 'ircrypt' == weechat.infolist_string(infolist, 'name'):
-		weechat.infolist_free(infolist)
-		return True
-	else:
-		ircrypt_error('Weechat plug-in IRCrypt not found', weechat.current_buffer())
-		weechat.infolist_free(infolist)
-		return False
-
-
 def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
 	'''Check for GnuPG binary to use
 	:returns: Tuple with binary name and version.
@@ -240,7 +227,7 @@ def ircrypt_check_binary():
 			weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
 
 
-def ircrypt_init():
+def ircrypt_gnupg_init():
 	'''Initialize GnuPG'''
 	global ircrypt_gpg_homedir, ircrypt_gpg_id
 	# This should usually be ~/.weechat/ircrypt
@@ -316,7 +303,7 @@ def ircrypt_key_generated_cb(data, command, errorcode, out, err):
 
 	ircrypt_info('A private key for asymmetric encryption was successfully'
 			+ 'generated and can now be used for communication.')
-	return ircrypt_init()
+	return ircrypt_gnupg_init()
 
 
 def ircrypt_receive_key_ex_ping(server, args, info):
@@ -1077,9 +1064,23 @@ def ircrypt_notice_hook(data, msgtype, server, args):
 	return args
 
 
-# register plugin
-if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
-		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
+def ircrypt_load(data, signal, ircrypt_path):
+	global ircrypt
+	if ircrypt_path.endswith('ircrypt.py'):
+		ircrypt = imp.load_source('ircrypt', ircrypt_path)
+		ircrypt_init()
+	return weechat.WEECHAT_RC_OK
+
+
+def ircrypt_check_ircrypt():
+	infolist = weechat.infolist_get('python_script', '', 'ircrypt')
+	weechat.infolist_next(infolist)
+	ircrypt_path = weechat.infolist_string(infolist, 'filename')
+	weechat.infolist_free(infolist)
+	return ircrypt_path
+
+
+def ircrypt_init():
 	# Initialize configuration
 	ircrypt_config_init()
 	ircrypt_config_read()
@@ -1087,7 +1088,7 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 	ircrypt_check_binary()
 	if ircrypt_gpg_binary:
 		# Initialize public key authentification
-		ircrypt_init()
+		ircrypt_gnupg_init()
 		# Register Hooks
 		weechat.hook_modifier('irc_in_notice',   'ircrypt_notice_hook', '')
 		weechat.hook_command('ircrypt-keyex', 'Commands of the Addon IRCrypt-keyex',
@@ -1097,6 +1098,18 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 				'ircrypt_command', '')
 	else:
 		ircrypt_error('GnuPG not found', weechat.current_buffer())
+
+
+# register plugin
+if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
+		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
+
+	ircrypt_path = ircrypt_check_ircrypt()
+	if ircrypt_path:
+		ircrypt = imp.load_source('ircrypt', ircrypt_path)
+		ircrypt_init()
+	else:
+		weechat.hook_signal('python_script_loaded', 'ircrypt_load', '')
 
 
 def ircrypt_unload_script():
