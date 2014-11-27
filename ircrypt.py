@@ -105,7 +105,6 @@ ircrypt_config_section   = {}
 ircrypt_config_option    = {}
 ircrypt_keys             = {}
 ircrypt_cipher           = {}
-ircrypt_gpg_binary       = None
 ircrypt_message_plain    = {}
 
 
@@ -141,8 +140,11 @@ def ircrypt_gnupg(stdin, *args):
 	:param  args: Additional command line options for GnuPG
 	:returns:     Tuple containing returncode, stdout and stderr
 	'''
+	gnupg = weechat.config_string(weechat.config_get('ircrypt.general.binary'))
+	if not gnupg:
+		return (99, '', 'GnuPG could not be found')
 	p = subprocess.Popen(
-			[ircrypt_gpg_binary, '--batch',  '--no-tty', '--quiet'] + list(args),
+			[gnupg, '--batch',  '--no-tty', '--quiet'] + list(args),
 			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate(stdin)
 	return (p.returncode, out, err)
@@ -631,18 +633,18 @@ def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
 def ircrypt_check_binary():
 	'''If binary is not set, try to determine it automatically
 	'''
-	global ircrypt_gpg_binary
-	ircrypt_gpg_binary = weechat.config_string(ircrypt_config_option['binary'])
-	if not ircrypt_gpg_binary:
-		ircrypt_gpg_binary,version = ircrypt_find_gpg_binary(('gpg','gpg2'))
-		if not ircrypt_gpg_binary:
+	cfg_option = weechat.config_get('ircrypt.general.binary')
+	gnupg = weechat.config_string(cfg_option)
+	if not gnupg:
+		(gnupg, version) = ircrypt_find_gpg_binary(('gpg','gpg2'))
+		if not gnupg:
 			ircrypt_error('Automatic detection of the GnuPG binary failed and '
 					'nothing is set manually. You wont be able to use IRCrypt like '
 					'this. Please install GnuPG or set the path to the binary to '
 					'use.', '')
 		else:
 			ircrypt_info('Found %s' % version, '')
-			weechat.config_option_set(ircrypt_config_option['binary'], ircrypt_gpg_binary, 1)
+			weechat.config_option_set(cfg_option, gnupg, 1)
 
 
 # register plugin
@@ -653,26 +655,25 @@ if __name__ == '__main__' and weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR,
 	ircrypt_config_init()
 	ircrypt_config_read()
 	ircrypt_check_binary()
-	if ircrypt_gpg_binary:
-		weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
-		weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
+	weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
+	weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
 
-		weechat.hook_command('ircrypt', 'Commands to manage IRCrypt options and execute IRCrypt commands',
-				'[list]'
-				'| set-key [-server <server>] <target> <key> '
-				'| remove-key [-server <server>] <target> '
-				'| set-cipher [-server <server>] <target> <cipher> '
-				'| remove-cipher [-server <server>] <target> '
-				'| plain [-server <server>] [-channel <channel>] <message>',
-				SCRIPT_HELP_TEXT,
-				'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-				'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
-				'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
-				'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
-				'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
-				'ircrypt_command', '')
-		weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
-		weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
+	weechat.hook_command('ircrypt', 'Commands to manage IRCrypt options and execute IRCrypt commands',
+			'[list]'
+			'| set-key [-server <server>] <target> <key> '
+			'| remove-key [-server <server>] <target> '
+			'| set-cipher [-server <server>] <target> <cipher> '
+			'| remove-cipher [-server <server>] <target> '
+			'| plain [-server <server>] [-channel <channel>] <message>',
+			SCRIPT_HELP_TEXT,
+			'list || set-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'|| remove-key %(irc_channel)|%(nicks)|-server %(irc_servers) %- '
+			'|| set-cipher %(irc_channel)|-server %(irc_servers) %- '
+			'|| remove-cipher |%(irc_channel)|-server %(irc_servers) %- '
+			'|| plain |-channel %(irc_channel)|-server %(irc_servers) %-',
+			'ircrypt_command', '')
+	weechat.bar_item_new('ircrypt', 'ircrypt_encryption_statusbar', '')
+	weechat.hook_signal('ircrypt_buffer_opened', 'update_encryption_status', '')
 
 
 def ircrypt_unload_script():
