@@ -26,3 +26,6 @@ def buffer_search(*args):
 
 def config_get(key):
 	return key
+
+def prefix(*args):
+	return ''

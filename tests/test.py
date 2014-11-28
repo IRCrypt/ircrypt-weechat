@@ -21,12 +21,12 @@ class TestSequenceFunctions(unittest.TestCase):
 	def test_gnupg(self):
 		import base64
 		# 'test' encrypted with password 'test'
-		encmsg = 'jA0EAwMCDvsNfqg4RyZgyRqTSfC2WSDIQm4GtvrW4WSq2l7gxGkQ9qIYiA=='
+		encmsg = b'jA0EAwMCDvsNfqg4RyZgyRqTSfC2WSDIQm4GtvrW4WSq2l7gxGkQ9qIYiA=='
 		encmsg = base64.b64decode(encmsg)
-		(ret, out, err) = ircrypt.ircrypt_gnupg('test\n' + encmsg,
+		(ret, out, err) = ircrypt.ircrypt_gnupg(b'test\n' + encmsg,
 				'--passphrase-fd', '-', '-d')
 		self.assertFalse(ret)
-		self.assertEqual(out, 'test')
+		self.assertEqual(out, b'test')
 
 
 	def test_plain(self):

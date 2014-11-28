@@ -155,7 +155,7 @@ def ircrypt_split_msg(cmd, pre, msg):
 	'''
 	return '\n'.join(['%s:>%s-%i %s' % (cmd, pre, i,
 		msg[i*MAX_PART_LEN:(i+1) * MAX_PART_LEN])
-		for i in xrange(1 + (len(msg) / MAX_PART_LEN))][::-1])
+		for i in range(1 + (len(msg) // MAX_PART_LEN))][::-1])
 
 
 def ircrypt_error(msg, buf):
@@ -212,13 +212,13 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 
 	if not '>CRY-' in args:
 		# if key exisits and no >CRY not part of message flag message as unencrypted
-		pre, message = string.split(args, ' :', 1)
+		pre, message = args.split(' :', 1)
 		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
 		return '%s :%s %s' % (pre, marker, message)
 
 	# if key exists and >CRY part of message start symmetric encryption
-	pre, message    = string.split(args, '>CRY-', 1)
-	number, message = string.split(message, ' ', 1 )
+	pre, message    = args.split('>CRY-', 1)
+	number, message = message.split(' ', 1 )
 
 	# Get key for the message memory
 	catchword = '%s.%s.%s' % (server, info['channel'], info['nick'])
@@ -249,17 +249,18 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 		return args
 
 	# Decrypt
-	(ret, out, err) = ircrypt_gnupg('%s\n%s' % (key, message),
+	message = (key).encode('utf-8') + b'\n' + message
+	(ret, out, err) = ircrypt_gnupg(message,
 			'--passphrase-fd', '-', '-q', '-d')
 
 	# Get and print GPG errors/warnings
 	if ret:
-		ircrypt_error(err, buf)
+		ircrypt_error(err.decode('utf-8'), buf)
 		return args
 	if err:
-		ircrypt_warn(err)
+		ircrypt_warn(err.decode('utf-8'))
 
-	return pre + out
+	return pre + out.decode('utf-8')
 
 
 def ircrypt_encrypt_hook(data, msgtype, server, args):
@@ -297,22 +298,22 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 	cipher = ircrypt_cipher.get(('%s/%s' % (server, info['channel'])).lower(),
 			weechat.config_string(ircrypt_config_option['sym_cipher']))
 	# Get prefix and message
-	pre, message = string.split(args, ':', 1)
+	pre, message = args.split(':', 1)
 
 	# encrypt message
-	(ret, out, err) = ircrypt_gnupg('%s\n%s' % (key, message),
+	(ret, out, err) = ircrypt_gnupg(('%s\n%s' % (key, message)).encode('utf-8'),
 			'--symmetric', '--cipher-algo', cipher, '--passphrase-fd', '-')
 
 	# Get and print GPG errors/warnings
 	if ret:
 		buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
-		ircrypt_error(err, buf)
+		ircrypt_error(err.decode('utf-8'), buf)
 		return args
 	if err:
-		ircrypt_warn(err)
+		ircrypt_warn(err.decode('utf-8'))
 
 	# Ensure the generated messages are not too long and send them
-	return ircrypt_split_msg(pre, 'CRY', base64.b64encode(out))
+	return ircrypt_split_msg(pre, 'CRY', base64.b64encode(out).decode('utf-8'))
 
 
 def ircrypt_config_init():
@@ -619,16 +620,12 @@ def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
 	:returns: Tuple with binary name and version.
 	'''
 	for binary in names:
-		try:
-			p = subprocess.Popen([binary, '--version'],
-					stdout=subprocess.PIPE,
-					stderr=subprocess.PIPE)
-			version = p.stdout.read().split('\n',1)[0]
-			if p.wait():
-				continue
+		p = subprocess.Popen([binary, '--version'],
+				stdout=subprocess.PIPE,
+				stderr=subprocess.PIPE)
+		version = p.communicate()[0].decode('utf-8').split('\n',1)[0]
+		if not p.returncode:
 			return binary, version
-		except:
-			pass
 	return None, None
 
 
