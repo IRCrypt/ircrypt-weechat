@@ -1,0 +1,13 @@
+language: python
+python:
+  - "2.7"
+  - "3.3"
+  - "3.4"
+# command to run tests
+script: python tests/test.py
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#IRCrypt"
+    on_success: change
+    on_failure: always
