@@ -29,6 +29,17 @@ class TestSequenceFunctions(unittest.TestCase):
 		self.assertEqual(out, b'test')
 
 
+	def test_split_message(self):
+		cmd = 'PRIVMSG #test '
+		pre = 'CRY'
+		msg = 'Loremipsumdolorsitametconsecteturadipiscing'
+		result = 'PRIVMSG #test :>CRY-1 secteturadipiscing\n' \
+				'PRIVMSG #test :>CRY-0 Loremipsumdolorsitametcon'
+		ircrypt.MAX_PART_LEN = 25
+		self.assertEqual(ircrypt.ircrypt_split_msg(cmd, pre, msg), result)
+		ircrypt.MAX_PART_LEN = 300
+
+
 	def test_plain(self):
 		import time
 		ircrypt.ircrypt_message_plain['testserver/#test'] = (time.time(), 'testmsg')
