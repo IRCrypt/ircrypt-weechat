@@ -3,8 +3,6 @@ sys.path.append((os.path.dirname(__file__) or '.') + '/..')
 import ircrypt
 import unittest
 
-ircrypt_config_option = {}
-ircrypt_config_option['binary'] = ''
 
 class TestSequenceFunctions(unittest.TestCase):
 
@@ -58,6 +56,71 @@ class TestSequenceFunctions(unittest.TestCase):
 		encmsg = ':testnick!~testuser@example.com ' + encmsg
 		decmsg = ircrypt.ircrypt_decrypt_hook('', '', 'testserver', encmsg)
 		self.assertEqual(decmsg, ':testnick!~testuser@example.com PRIVMSG #test :test')
+
+
+	def test_ircrypt_info(self):
+		ircrypt.ircrypt_info('test')
+		ircrypt.ircrypt_info('test', 'buffer')
+
+
+	def test_ircrypt_warn(self):
+		ircrypt.ircrypt_warn('test')
+		ircrypt.ircrypt_warn('test', 'buffer')
+
+
+	def test_ircrypt_error(self):
+		ircrypt.ircrypt_error('test', 'buffer')
+
+
+	def test_command_set_keys(self):
+		try:
+			del ircrypt.ircrypt_keys['testserver/#test']
+		except:
+			pass
+		ret = ircrypt.ircrypt_command_set_keys('testserver/#test', 'testkey')
+		self.assertEqual(ircrypt.ircrypt_keys.get('testserver/#test'), 'testkey')
+		self.assertEqual(ret,'OK')
+
+
+	def test_command_remove_keys(self):
+		ircrypt.ircrypt_keys['testserver/#test'] = 'testkey'
+		ret = ircrypt.ircrypt_command_remove_keys('testserver/#test')
+		self.assertEqual(ircrypt.ircrypt_keys.get('testserver/#test'), None)
+		self.assertEqual(ret, 'OK')
+		ret = ircrypt.ircrypt_command_remove_keys('testserver/#test')
+		self.assertEqual(ret, 'OK')
+
+
+	def test_command_set_cip(self):
+		try:
+			del ircrypt.ircrypt_cipher['testserver/#test']
+		except:
+			pass
+		ret = ircrypt.ircrypt_command_set_cip('testserver/#test', 'TWOFISH')
+		self.assertEqual(ircrypt.ircrypt_cipher.get('testserver/#test'), 'TWOFISH')
+		self.assertEqual(ret,'OK')
+
+
+	def test_command_remove_cip(self):
+		ircrypt.ircrypt_cipher['testserver/#test'] = 'TWOFISH'
+		ret = ircrypt.ircrypt_command_remove_cip('testserver/#test')
+		self.assertEqual(ircrypt.ircrypt_cipher.get('testserver/#test'), None)
+		self.assertEqual(ret, 'OK')
+		ret = ircrypt.ircrypt_command_remove_cip('testserver/#test')
+		self.assertEqual(ret, 'OK')
+
+
+	def test_command_list(self):
+		cip = {'testserver/#test1' : 'TWOFISH', 'testserver/#test2' : 'AES'}
+		keys = {'testserver/#test1' : 'testkey', 'testserver/#test2' : 'testkey'}
+		ircrypt.ircrypt_cipher = {}
+		ircrypt.ircrypt_keys = {}
+		ret = ircrypt.ircrypt_command_list()
+		self.assertEqual(ret, 'OK')
+		ircrypt.ircrypt_cipher = {'testserver/#test' : 'TWOFISH'}
+		ircrypt.ircrypt_keys = {'testserver/#test' : 'testkey'}
+		ret = ircrypt.ircrypt_command_list()
+		self.assertEqual(ret, 'OK')
 
 
 if __name__ == '__main__':

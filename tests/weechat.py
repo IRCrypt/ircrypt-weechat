@@ -4,6 +4,8 @@ Some mock functions to use for testing weechat plug-ins
 
 config = {}
 
+WEECHAT_RC_OK = 'OK'
+
 def color(*args, **kwargs):
 	return ''
 
@@ -28,4 +30,7 @@ def config_get(key):
 	return key
 
 def prefix(*args):
+	return ''
+
+def current_buffer():
 	return ''
