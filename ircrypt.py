@@ -593,10 +593,13 @@ def ircrypt_encryption_statusbar(*args):
 	if not key:
 		return ''
 
-	# Return marer, but replace {{cipher}} with used cipher for current channel
-	return weechat.config_string(ircrypt_config_option['encrypted']).replace(
-			'{{cipher}}', ircrypt_cipher.get(('%s/%s' % (server, channel)).lower(),
-				weechat.config_string(ircrypt_config_option['sym_cipher'])))
+	# Get cipher used for current channel
+	cipher = weechat.config_string(ircrypt_config_option['sym_cipher'])
+	cipher = ircrypt_cipher.get(('%s/%s' % (server, channel)).lower(), cipher)
+
+	# Return marker, but replace {{cipher}}
+	marker = weechat.config_string(ircrypt_config_option['encrypted'])
+	return marker.replace('{{cipher}}', cipher)
 
 
 def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
