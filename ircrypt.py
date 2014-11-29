@@ -249,7 +249,11 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 		return args
 
 	# Decrypt
-	message = (key).encode('utf-8') + b'\n' + message
+	try:
+		message = (key).encode('utf-8') + b'\n' + message
+	except:
+		# For Python 2.x
+		message = key + b'\n' + message
 	(ret, out, err) = ircrypt_gnupg(message,
 			'--passphrase-fd', '-', '-q', '-d')
 
@@ -420,7 +424,7 @@ def ircrypt_config_keys_write_cb(data, config_file, section_name):
 	global ircrypt_keys
 
 	weechat.config_write_line(config_file, section_name, '')
-	for target, key in sorted(ircrypt_keys.iteritems()):
+	for target, key in sorted(list(ircrypt_keys.items())):
 		weechat.config_write_line(config_file, target.lower(), key)
 
 	return weechat.WEECHAT_RC_OK
@@ -441,28 +445,23 @@ def ircrypt_config_special_cipher_write_cb(data, config_file, section_name):
 	global ircrypt_cipher
 
 	weechat.config_write_line(config_file, section_name, '')
-	for target, cipher in sorted(ircrypt_cipher.iteritems()):
+	for target, cipher in sorted(list(ircrypt_cipher.items())):
 		weechat.config_write_line(config_file, target.lower(), cipher)
 
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command_list():
-	'''ircrypt command to list the keys, asymmetric identifier and Special Cipher'''
+	'''List set keys and channel specific ciphers.
+	'''
+	# List keys
+	keys = '\n'.join([' %s : %s' % x for x in ircrypt_keys.items()])
+	ircrypt_info('Symmetric Keys:\n' + keys if keys else 'No symmetric keys set')
 
-	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
-
-	key = ''
-	for servchan,ids in ircrypt_keys.iteritems():
-		key =  key + '%s : %s\n' % (servchan.lower(), ids)
-	if key: key = 'Symmetric keys:\n' + key
-	else: key = 'No known symmetric keys\n'
-	cipher = ''
-	for servchan,ids in ircrypt_cipher.iteritems():
-		cipher =  cipher + '%s : %s\n' % (servchan.lower(), ids)
-	if cipher: cipher = 'Special ciphers:\n' + cipher
-	else: cipher = 'No known special ciphers\n'
-	ircrypt_info(key+cipher)
+	# List channel specific ciphers
+	ciphers = '\n'.join([' %s : %s' % x for x in ircrypt_cipher.items()])
+	ircrypt_info('Special ciphers:\n' + ciphers if ciphers
+			else 'No special ciphers set')
 	return weechat.WEECHAT_RC_OK
 
 
@@ -536,7 +535,7 @@ def ircrypt_command_plain(buffer, server, args, argv):
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command.
 	'''
-	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
+	global ircrypt_keys, ircrypt_cipher
 
 	argv = [a for a in args.split(' ') if a]
 
