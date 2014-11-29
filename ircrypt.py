@@ -457,44 +457,50 @@ def ircrypt_command_list():
 
 
 def ircrypt_command_set_keys(target, key):
-	'''ircrypt command to set key for target (target is a server/channel combination)'''
-	# Set key
+	'''Set key for target.
+
+	:param target: server/channel combination
+	:param key: Key to use for target
+	'''
 	ircrypt_keys[target.lower()] = key
-	# Print status message to current buffer
 	ircrypt_info('Set key for %s' % target)
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command_remove_keys(target):
-	'''ircrypt command to remove key for target (target is a server/channel combination)'''
-	# Check if key is set
-	if target.lower() not in ircrypt_keys:
-		ircrypt_info('No existing key for %s.' % target)
-	else:
-		# Delete key and print status message in current buffer
+	'''Remove key for target.
+
+	:param target: server/channel combination
+	'''
+	try:
 		del ircrypt_keys[target.lower()]
 		ircrypt_info('Removed key for %s' % target)
+	except KeyError:
+		ircrypt_info('No existing key for %s.' % target)
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command_set_cip(target, cipher):
-	'''ircrypt command to set key for target (target is a server/channel combination)'''
-	# Set special cipher
+	'''Set cipher for target.
+
+	:param target: server/channel combination
+	:param cipher: Cipher to use for target
+	'''
 	ircrypt_cipher[target.lower()] = cipher
-	# Print status message in current buffer
 	ircrypt_info('Set cipher %s for %s' % (cipher, target))
 	return weechat.WEECHAT_RC_OK
 
 
 def ircrypt_command_remove_cip(target):
-	'''ircrypt command to remove key for target (target is a server/channel combination)'''
-	# Check if special cipher is set
-	if target.lower() not in ircrypt_cipher:
-		ircrypt_info('No special cipher set for %s.' % target)
-	else:
-		# Delete special cipher and print status message in current buffer
+	'''Remove cipher for target.
+
+	:param target: server/channel combination
+	'''
+	try:
 		del ircrypt_cipher[target.lower()]
 		ircrypt_info('Removed special cipher. Using default cipher for %s instead.' % target)
+	except KeyError:
+		ircrypt_info('No special cipher set for %s.' % target)
 	return weechat.WEECHAT_RC_OK
 
 
@@ -522,7 +528,7 @@ def ircrypt_command_plain(buffer, server, args, argv):
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command.
 	'''
-	argv = [a for a in args.split(' ') if a]
+	argv = args.split()
 
 	# list
 	if not argv or argv == ['list']:
