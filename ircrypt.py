@@ -452,18 +452,17 @@ def ircrypt_command_list():
 
 	global ircrypt_keys, ircrypt_asym_id, ircrypt_cipher
 
-	# Get buffer
-	buffer = weechat.current_buffer()
-	# Print keys, asymmetric identifier and special cipher in current buffer
-	weechat.prnt(buffer,'\nKeys:')
-	for servchan,key in ircrypt_keys.iteritems():
-		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), key))
-
-	weechat.prnt(buffer,'\nSpecial Cipher:')
-	for servchan,spcip in ircrypt_cipher.iteritems():
-		weechat.prnt(buffer,'%s : %s' % (servchan.lower(), spcip))
-
-	weechat.prnt(buffer,'\n')
+	key = ''
+	for servchan,ids in ircrypt_keys.iteritems():
+		key =  key + '%s : %s\n' % (servchan.lower(), ids)
+	if key: key = 'Symmetric keys:\n' + key
+	else: key = 'No known symmetric keys\n'
+	cipher = ''
+	for servchan,ids in ircrypt_cipher.iteritems():
+		cipher =  cipher + '%s : %s\n' % (servchan.lower(), ids)
+	if cipher: cipher = 'Special ciphers:\n' + cipher
+	else: cipher = 'No known special ciphers\n'
+	ircrypt_info(key+cipher)
 	return weechat.WEECHAT_RC_OK
 
 
