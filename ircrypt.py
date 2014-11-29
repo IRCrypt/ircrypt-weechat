@@ -387,7 +387,12 @@ def ircrypt_config_init():
 def ircrypt_config_reload_cb(data, config_file):
 	'''Handle a reload of the configuration file.
 	'''
-	return weechat.WEECHAT_CONFIG_READ_OK
+	global ircrypt_keys, ircrypt_cipher
+	# Forget Keys and ciphers to make sure they are properly reloaded and no old
+	# ones are left
+	ircrypt_keys   = {}
+	ircrypt_cipher = {}
+	return weechat.config_reload(config_file)
 
 
 def ircrypt_config_read():
@@ -434,7 +439,6 @@ def ircrypt_config_special_cipher_write_cb(data, config_file, section_name):
 	weechat.config_write_line(config_file, section_name, '')
 	for target, cipher in sorted(list(ircrypt_cipher.items())):
 		weechat.config_write_line(config_file, target.lower(), cipher)
-
 	return weechat.WEECHAT_RC_OK
 
 
@@ -570,7 +574,6 @@ def ircrypt_command(data, buffer, args):
 		if len(argv) != 2:
 			return weechat.WEECHAT_RC_ERROR
 		return ircrypt_command_remove_cip(target)
-
 
 	ircrypt_error('Unknown command. Try  /help ircrypt', buffer)
 	return weechat.WEECHAT_RC_OK
