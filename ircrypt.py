@@ -193,10 +193,6 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_config_option, ircrypt_keys
-	global ircrypt_msg_memory, ircrypt_config_option
-
-
 	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
 
 	# Check if channel is own nick and if change channel to nick of sender
@@ -277,7 +273,6 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	global ircrypt_keys, ircrypt_cipher
 	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
 
 	# check if this message is to be send as plain text
@@ -328,7 +323,7 @@ def ircrypt_config_init():
 	''' This method initializes the configuration file. It creates sections and
 	options in memory and prepares the handling of key sections.
 	'''
-	global ircrypt_config_file, ircrypt_config_section, ircrypt_config_option
+	global ircrypt_config_file
 	ircrypt_config_file = weechat.config_new('ircrypt', 'ircrypt_config_reload_cb', '')
 	if not ircrypt_config_file:
 		return
@@ -398,14 +393,12 @@ def ircrypt_config_reload_cb(data, config_file):
 def ircrypt_config_read():
 	''' Read IRCrypt configuration file (ircrypt.conf).
 	'''
-	global ircrypt_config_file
 	return weechat.config_read(ircrypt_config_file)
 
 
 def ircrypt_config_write():
 	''' Write IRCrypt configuration file (ircrypt.conf) to disk.
 	'''
-	global ircrypt_config_file
 	return weechat.config_write(ircrypt_config_file)
 
 
@@ -413,7 +406,6 @@ def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 		value):
 	'''Read elements of the key section from the configuration file.
 	'''
-	global ircrypt_keys
 	ircrypt_keys[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
@@ -421,8 +413,6 @@ def ircrypt_config_keys_read_cb(data, config_file, section_name, option_name,
 def ircrypt_config_keys_write_cb(data, config_file, section_name):
 	'''Write passphrases to the key section of the configuration file.
 	'''
-	global ircrypt_keys
-
 	weechat.config_write_line(config_file, section_name, '')
 	for target, key in sorted(list(ircrypt_keys.items())):
 		weechat.config_write_line(config_file, target.lower(), key)
@@ -434,7 +424,6 @@ def ircrypt_config_special_cipher_read_cb(data, config_file, section_name,
 		option_name, value):
 	'''Read elements of the key section from the configuration file.
 	'''
-	global ircrypt_cipher
 	ircrypt_cipher[option_name.lower()] = value
 	return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
 
@@ -442,8 +431,6 @@ def ircrypt_config_special_cipher_read_cb(data, config_file, section_name,
 def ircrypt_config_special_cipher_write_cb(data, config_file, section_name):
 	'''Write passphrases to the key section of the configuration file.
 	'''
-	global ircrypt_cipher
-
 	weechat.config_write_line(config_file, section_name, '')
 	for target, cipher in sorted(list(ircrypt_cipher.items())):
 		weechat.config_write_line(config_file, target.lower(), cipher)
@@ -467,7 +454,6 @@ def ircrypt_command_list():
 
 def ircrypt_command_set_keys(target, key):
 	'''ircrypt command to set key for target (target is a server/channel combination)'''
-	global ircrypt_keys
 	# Set key
 	ircrypt_keys[target.lower()] = key
 	# Print status message to current buffer
@@ -477,7 +463,6 @@ def ircrypt_command_set_keys(target, key):
 
 def ircrypt_command_remove_keys(target):
 	'''ircrypt command to remove key for target (target is a server/channel combination)'''
-	global ircrypt_keys
 	# Check if key is set
 	if target.lower() not in ircrypt_keys:
 		ircrypt_info('No existing key for %s.' % target)
@@ -490,7 +475,6 @@ def ircrypt_command_remove_keys(target):
 
 def ircrypt_command_set_cip(target, cipher):
 	'''ircrypt command to set key for target (target is a server/channel combination)'''
-	global ircrypt_cipher
 	# Set special cipher
 	ircrypt_cipher[target.lower()] = cipher
 	# Print status message in current buffer
@@ -500,7 +484,6 @@ def ircrypt_command_set_cip(target, cipher):
 
 def ircrypt_command_remove_cip(target):
 	'''ircrypt command to remove key for target (target is a server/channel combination)'''
-	global ircrypt_cipher
 	# Check if special cipher is set
 	if target.lower() not in ircrypt_cipher:
 		ircrypt_info('No special cipher set for %s.' % target)
@@ -535,8 +518,6 @@ def ircrypt_command_plain(buffer, server, args, argv):
 def ircrypt_command(data, buffer, args):
 	'''Hook to handle the /ircrypt weechat command.
 	'''
-	global ircrypt_keys, ircrypt_cipher
-
 	argv = [a for a in args.split(' ') if a]
 
 	# list
@@ -601,8 +582,6 @@ def ircrypt_encryption_statusbar(*args):
 	can be used, which will be replaced with the cipher used for the current
 	channel.
 	'''
-	global ircrypt_cipher
-
 	channel = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_channel')
 	server  = weechat.buffer_get_string(weechat.current_buffer(), 'localvar_server')
 	key = ircrypt_keys.get(('%s/%s' % (server, channel)).lower())
