@@ -301,7 +301,11 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 	pre, message = args.split(':', 1)
 
 	# encrypt message
-	(ret, out, err) = ircrypt_gnupg(('%s\n%s' % (key, message)).encode('utf-8'),
+	try:
+		inp = key.encode('utf-8') + b'\n' + message.encode('utf-8')
+	except:
+		inp = key + b'\n' + message
+	(ret, out, err) = ircrypt_gnupg(inp,
 			'--symmetric', '--cipher-algo', cipher, '--passphrase-fd', '-')
 
 	# Get and print GPG errors/warnings
