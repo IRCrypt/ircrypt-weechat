@@ -1002,7 +1002,7 @@ def ircrypt_init():
 
 
 # register plugin
-if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
+if __name__ == '__main__' and weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE,
 		SCRIPT_DESC, 'ircrypt_unload_script', 'UTF-8'):
 
 	ircrypt_path = ircrypt_check_ircrypt()
