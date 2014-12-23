@@ -153,9 +153,10 @@ def ircrypt_gnupg(stdin, *args):
 def ircrypt_split_msg(cmd, pre, msg):
 	'''Convert encrypted message in MAX_PART_LEN sized blocks
 	'''
-	return '\n'.join(['%s:>%s-%i %s' % (cmd, pre, i,
-		msg[i*MAX_PART_LEN:(i+1) * MAX_PART_LEN])
-		for i in range(1 + (len(msg) // MAX_PART_LEN))][::-1])
+	msg = msg.rstrip()
+	return '\n'.join(['%s:>%s-%i %s' %
+		(cmd, pre, i // MAX_PART_LEN, msg[i:i+MAX_PART_LEN])
+		for i in range(0, len(msg), MAX_PART_LEN)][::-1])
 
 
 def ircrypt_error(msg, buf):
