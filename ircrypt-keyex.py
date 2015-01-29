@@ -53,7 +53,7 @@ sys.dont_write_bytecode = True
 SCRIPT_NAME    = 'ircrypt-keyex'
 SCRIPT_AUTHOR  = 'Sven Haardiek <sven@haardiek.de>, Lars Kiesow <lkiesow@uos.de>'
 SCRIPT_VERSION = 'SNAPSHOT'
-SCRIPT_LICENSE = 'GLP3'
+SCRIPT_LICENSE = 'GPL3'
 SCRIPT_DESC    = 'IRCrypt-KeyEx: Addon for IRCrypt to enable key exchange via public key authentication'
 SCRIPT_HELP_TEXT = '''%(bold)sIRCrypt-KeyEx command options: %(normal)s
 list                                                    List public key fingerprints
