@@ -24,13 +24,13 @@
 #
 # == About ==================================================================
 #
-#  The weechat IRCrypt plug-in will send messages encrypted to all channels for
+#  The weechat IRCrypt script will send messages encrypted to all channels for
 #  which a passphrase is set. A channel can either be a regular IRC multi-user
 #  channel (i.e. #IRCrypt) or another users nickname.
 #
 # == Project ================================================================
 #
-# This plug-in is part of the IRCrypt project. For mor information or to
+# This script is part of the IRCrypt project. For mor information or to
 # participate, please visit
 #
 #   https://github.com/IRCrypt
@@ -640,7 +640,7 @@ def ircrypt_check_binary():
 			weechat.config_option_set(cfg_option, gnupg, 1)
 
 
-# register plugin
+# register script
 if __name__ == '__main__' and weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR,
 		SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, 'ircrypt_unload_script',
 		'UTF-8'):
