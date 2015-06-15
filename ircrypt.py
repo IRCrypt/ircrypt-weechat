@@ -147,7 +147,6 @@ def ircrypt_gnupg(stdin, *args):
 			[gnupg, '--batch',  '--no-tty'] + list(args),
 			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate(stdin)
-
 	return (p.returncode, out, err)
 
 
@@ -263,7 +262,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 		ircrypt_warn(err.decode('utf-8'))
 
 	# We expect IRC commands. Hence there should never be more than one line
-	out = out.replace('\r', ' ').replace('\n', ' ')
+	out = out.replace(b'\r', b' ').replace(b'\n', b' ')
 
 	return pre + out.decode('utf-8')
 
