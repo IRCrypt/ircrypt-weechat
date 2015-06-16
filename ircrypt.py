@@ -207,7 +207,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	if not key:
 		return args
 
-	if not '>CRY-' in args:
+	if not args.split(' :', 1)[-1].startswith('>CRY-'):
 		# if key exisits and no >CRY not part of message flag message as unencrypted
 		pre, message = args.split(' :', 1)
 		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
