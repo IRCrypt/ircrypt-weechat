@@ -43,7 +43,7 @@
 #
 
 
-import weechat, string, os, subprocess, base64, time
+import weechat, subprocess, base64, time
 
 # Constants used in this script
 SCRIPT_NAME    = 'ircrypt'
