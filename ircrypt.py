@@ -94,10 +94,10 @@ Tip: You can list all options and what they are currently set to by executing:
 %(bold)sircrypt.general.binary %(normal)s
    This will set the GnuPG binary used for encryption and decryption. IRCrypt
    will try to set this automatically.
-''' % {'bold':weechat.color('bold'), 'normal':weechat.color('-bold')}
+''' % {'bold': weechat.color('bold'), 'normal': weechat.color('-bold')}
 
 MAX_PART_LEN     = 300
-MSG_PART_TIMEOUT = 300 # 5min
+MSG_PART_TIMEOUT = 300  # 5min
 
 
 # Global variables and memory used to store message parts, pending requests,
@@ -112,8 +112,8 @@ ircrypt_message_plain    = {}
 
 
 class MessageParts:
-	'''Class used for storing parts of messages which were split after
-	encryption due to their length.'''
+	'''Class used for storing parts of messages which were split after encryption
+	due to their length.'''
 
 	modified = 0
 	last_id  = None
@@ -125,7 +125,7 @@ class MessageParts:
 		message part.
 		'''
 		# Check if id is correct. If not, throw away old parts:
-		if self.last_id and self.last_id != id+1:
+		if self.last_id and self.last_id != id + 1:
 			self.message = ''
 		# Check if the are old message parts which belong due to their old age
 		# probably not to this message:
@@ -146,9 +146,8 @@ def ircrypt_gnupg(stdin, *args):
 	gnupg = weechat.config_string(weechat.config_get('ircrypt.general.binary'))
 	if not gnupg:
 		return (99, '', 'GnuPG could not be found')
-	p = subprocess.Popen(
-			[gnupg, '--batch',  '--no-tty'] + list(args),
-			stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	p = subprocess.Popen([gnupg, '--batch', '--no-tty'] + list(args),
+					stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate(stdin)
 	return (p.returncode, out, err)
 
@@ -158,7 +157,7 @@ def ircrypt_split_msg(cmd, pre, msg):
 	'''
 	msg = msg.rstrip()
 	return '\n'.join(['%s:>%s-%i %s' %
-		(cmd, pre, i // MAX_PART_LEN, msg[i:i+MAX_PART_LEN])
+		(cmd, pre, i // MAX_PART_LEN, msg[i:i + MAX_PART_LEN])
 		for i in range(0, len(msg), MAX_PART_LEN)][::-1])
 
 
@@ -197,7 +196,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	info = weechat.info_get_hashtable('irc_message_parse', { 'message': args })
+	info = weechat.info_get_hashtable('irc_message_parse', {'message': args})
 
 	# Check if channel is own nick and if change channel to nick of sender
 	if info['channel'][0] not in '#&':
@@ -210,7 +209,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	if not key:
 		return args
 
-	if not '>CRY-' in args:
+	if '>CRY-' not in args:
 		# if key exisits and no >CRY not part of message flag message as unencrypted
 		pre, message = args.split(' :', 1)
 		marker = weechat.config_string(ircrypt_config_option['unencrypted'])
@@ -218,7 +217,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 
 	# if key exists and >CRY part of message start symmetric encryption
 	pre, message    = args.split('>CRY-', 1)
-	number, message = message.split(' ', 1 )
+	number, message = message.split(' ', 1)
 
 	# Get key for the message memory
 	catchword = '%s.%s.%s' % (server, info['channel'], info['nick'])
@@ -226,7 +225,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 	# Decrypt only if we got last part of the message
 	# otherwise put the message into a global memory and quit
 	if int(number) != 0:
-		if not catchword in ircrypt_msg_memory:
+		if catchword not in ircrypt_msg_memory:
 			ircrypt_msg_memory[catchword] = MessageParts()
 		ircrypt_msg_memory[catchword].update(int(number), message)
 		return ''
@@ -239,7 +238,7 @@ def ircrypt_decrypt_hook(data, msgtype, server, args):
 		pass
 
 	# Get message buffer in case we need to print an error
-	buf = weechat.buffer_search('irc', '%s.%s' % (server,info['channel']))
+	buf = weechat.buffer_search('irc', '%s.%s' % (server, info['channel']))
 
 	# Decode base64 encoded message
 	try:
@@ -280,14 +279,14 @@ def ircrypt_encrypt_hook(data, msgtype, server, args):
 	:param server: IRC server the message comes from.
 	:param args: IRC command line-
 	'''
-	info = weechat.info_get_hashtable("irc_message_parse", { "message": args })
+	info = weechat.info_get_hashtable("irc_message_parse", {"message": args})
 
 	# check if this message is to be send as plain text
 	plain = ircrypt_message_plain.get('%s/%s' % (server, info['channel']))
 	if plain:
 		del ircrypt_message_plain['%s/%s' % (server, info['channel'])]
 		if (plain[0] - time.time()) < 5 \
-				and args == 'PRIVMSG %s :%s' % (info['channel'], plain[1]):
+					and args == 'PRIVMSG %s :%s' % (info['channel'], plain[1]):
 			args = args.replace('PRIVMSG %s :%s ' % (
 				info['channel'],
 				weechat.config_string(ircrypt_config_option['unencrypted'])),
@@ -337,56 +336,56 @@ def ircrypt_config_init():
 
 	# marker
 	ircrypt_config_section['marker'] = weechat.config_new_section(
-			ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '',
-			'', '')
+		ircrypt_config_file, 'marker', 0, 0, '', '', '', '', '', '', '', '',
+		'', '')
 	if not ircrypt_config_section['marker']:
 		weechat.config_free(ircrypt_config_file)
 		return
 	ircrypt_config_option['encrypted'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['marker'],
-			'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
-			'encrypted', 'encrypted', 0, '', '', '', '', '', '')
+		ircrypt_config_file, ircrypt_config_section['marker'],
+		'encrypted', 'string', 'Marker for encrypted messages', '', 0, 0,
+		'encrypted', 'encrypted', 0, '', '', '', '', '', '')
 	ircrypt_config_option['unencrypted'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
-			'string', 'Marker for unencrypted messages received in an encrypted channel',
-			'', 0, 0, '', 'u', 0, '', '', '', '', '', '')
+		ircrypt_config_file, ircrypt_config_section['marker'], 'unencrypted',
+		'string', 'Marker for unencrypted messages received in an encrypted channel',
+		'', 0, 0, '', 'u', 0, '', '', '', '', '', '')
 
 	# cipher options
 	ircrypt_config_section['cipher'] = weechat.config_new_section(
-			ircrypt_config_file, 'cipher', 0, 0, '', '', '', '', '', '', '', '',
-			'', '')
+		ircrypt_config_file, 'cipher', 0, 0, '', '', '', '', '', '', '', '',
+		'', '')
 	if not ircrypt_config_section['cipher']:
 		weechat.config_free(ircrypt_config_file)
 		return
 	ircrypt_config_option['sym_cipher'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['cipher'],
-			'sym_cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
-			'TWOFISH', 'TWOFISH', 0, '', '', '', '', '', '')
+		ircrypt_config_file, ircrypt_config_section['cipher'],
+		'sym_cipher', 'string', 'symmetric cipher used by default', '', 0, 0,
+		'TWOFISH', 'TWOFISH', 0, '', '', '', '', '', '')
 
 	# general options
 	ircrypt_config_section['general'] = weechat.config_new_section(
-			ircrypt_config_file, 'general', 0, 0, '', '', '', '', '', '', '', '',
-			'', '')
+		ircrypt_config_file, 'general', 0, 0, '', '', '', '', '', '', '', '',
+		'', '')
 	if not ircrypt_config_section['general']:
 		weechat.config_free(ircrypt_config_file)
 		return
 	ircrypt_config_option['binary'] = weechat.config_new_option(
-			ircrypt_config_file, ircrypt_config_section['general'],
-			'binary', 'string', 'GnuPG binary to use', '', 0, 0,
-			'', '', 0, '', '', '', '', '', '')
+		ircrypt_config_file, ircrypt_config_section['general'],
+		'binary', 'string', 'GnuPG binary to use', '', 0, 0,
+		'', '', 0, '', '', '', '', '', '')
 
 	# keys
 	ircrypt_config_section['keys'] = weechat.config_new_section(
-			ircrypt_config_file, 'keys', 0, 0, 'ircrypt_config_keys_read_cb', '',
-			'ircrypt_config_keys_write_cb', '', '', '', '', '', '', '')
+		ircrypt_config_file, 'keys', 0, 0, 'ircrypt_config_keys_read_cb', '',
+		'ircrypt_config_keys_write_cb', '', '', '', '', '', '', '')
 	if not ircrypt_config_section['keys']:
 		weechat.config_free(ircrypt_config_file)
 
 	# Special Ciphers
 	ircrypt_config_section['special_cipher'] = weechat.config_new_section(
-			ircrypt_config_file, 'special_cipher', 0, 0,
-			'ircrypt_config_special_cipher_read_cb', '',
-			'ircrypt_config_special_cipher_write_cb', '', '', '', '', '', '', '')
+		ircrypt_config_file, 'special_cipher', 0, 0,
+		'ircrypt_config_special_cipher_read_cb', '',
+		'ircrypt_config_special_cipher_write_cb', '', '', '', '', '', '', '')
 	if not ircrypt_config_section['special_cipher']:
 		weechat.config_free(ircrypt_config_file)
 
@@ -517,7 +516,7 @@ def ircrypt_command_plain(buffer, server, args, argv):
 	channel = ''
 	if (len(argv) > 2 and argv[1] == '-channel'):
 		channel = argv[2]
-		args = (args.split(' ', 2)+[''])[2]
+		args = (args.split(' ', 2) + [''])[2]
 	else:
 		# Try to determine the server automatically
 		channel = weechat.buffer_get_string(buffer, 'localvar_channel')
@@ -527,8 +526,7 @@ def ircrypt_command_plain(buffer, server, args, argv):
 	marker = weechat.config_string(ircrypt_config_option['unencrypted'])
 	msg = marker + ' ' + args.split(' ', 1)[-1]
 	ircrypt_message_plain['%s/%s' % (server, channel)] = (time.time(), msg)
-	weechat.command('','/msg -server %s %s %s' % \
-			(server, channel, msg))
+	weechat.command('', '/msg -server %s %s %s' % (server, channel, msg))
 	return weechat.WEECHAT_RC_OK
 
 
@@ -545,7 +543,7 @@ def ircrypt_command(data, buffer, args):
 	if (len(argv) > 2 and argv[1] == '-server'):
 		server = argv[2]
 		del argv[1:3]
-		args = (args.split(' ', 2)+[''])[2]
+		args = (args.split(' ', 2) + [''])[2]
 	else:
 		# Try to determine the server automatically
 		server = weechat.buffer_get_string(buffer, 'localvar_server')
@@ -615,7 +613,7 @@ def ircrypt_encryption_statusbar(*args):
 	return marker.replace('{{cipher}}', cipher)
 
 
-def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
+def ircrypt_find_gpg_binary(names=('gpg2', 'gpg')):
 	'''Check for GnuPG binary to use
 	:returns: Tuple with binary name and version.
 	'''
@@ -623,7 +621,7 @@ def ircrypt_find_gpg_binary(names=('gpg2','gpg')):
 		p = subprocess.Popen([binary, '--version'],
 				stdout=subprocess.PIPE,
 				stderr=subprocess.PIPE)
-		version = p.communicate()[0].decode('utf-8').split('\n',1)[0]
+		version = p.communicate()[0].decode('utf-8').split('\n', 1)[0]
 		if not p.returncode:
 			return binary, version
 	return None, None
@@ -635,7 +633,7 @@ def ircrypt_check_binary():
 	cfg_option = weechat.config_get('ircrypt.general.binary')
 	gnupg = weechat.config_string(cfg_option)
 	if not gnupg:
-		(gnupg, version) = ircrypt_find_gpg_binary(('gpg','gpg2'))
+		(gnupg, version) = ircrypt_find_gpg_binary(('gpg', 'gpg2'))
 		if not gnupg:
 			ircrypt_error('Automatic detection of the GnuPG binary failed and '
 					'nothing is set manually. You wont be able to use IRCrypt like '
@@ -654,7 +652,7 @@ if __name__ == '__main__' and weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR,
 	ircrypt_config_init()
 	ircrypt_config_read()
 	ircrypt_check_binary()
-	weechat.hook_modifier('irc_in_privmsg',  'ircrypt_decrypt_hook', '')
+	weechat.hook_modifier('irc_in_privmsg', 'ircrypt_decrypt_hook', '')
 	weechat.hook_modifier('irc_out_privmsg', 'ircrypt_encrypt_hook', '')
 
 	weechat.hook_command('ircrypt', 'Commands to manage IRCrypt options and execute IRCrypt commands',
